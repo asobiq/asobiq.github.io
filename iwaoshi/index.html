@@ -1,0 +1,4370 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>イワオシ</title>
+<!-- フォントは assets/fonts/ に同梱(オフラインでも表示が崩れない) -->
+<link href="assets/fonts/fonts.css" rel="stylesheet">
+<style>
+/* ============================================================
+   レトロ版オリジナルUI(デフォルト):root に保持。
+   このパレットがゲームの原典。body にテーマクラスを付けない =
+   この見た目になる。下部のモダンテーマ群はこの変数を上書きする
+   だけで、ゲームロジックには一切手を加えていない。
+   ============================================================ */
+:root{
+  --cave:#221813;
+  --cave2:#2e211a;
+  --sand:#c9a876;
+  --sand2:#b8945f;
+  --rockwall:#55402f;
+  --rockwall2:#473527;
+  --boulder:#9b8b79;
+  --rune:#56e0c3;
+  --ink:#f3e7d3;
+  --accent:#e0a13a;
+  /* テーマで差し替える派生トークン(既定=レトロ) */
+  --bodyBg: radial-gradient(ellipse at 50% -10%, #3a2a1f 0%, transparent 55%), var(--cave);
+  --gameFont: 'DotGothic16', 'Hiragino Kaku Gothic ProN', sans-serif;
+  --panel: var(--cave2);
+  --panelBorder: #4a3729;
+  --boardBg: var(--cave2);
+  --boardShadow: 0 0 0 3px #120c08, 0 0 0 6px #4a3729, 0 14px 30px rgba(0,0,0,.6);
+  --floorGrad: linear-gradient(135deg,var(--sand) 0%,var(--sand2) 100%);
+  --floorInset: inset 0 0 0 1px rgba(0,0,0,.13), inset 0 2px 0 rgba(255,255,255,.12);
+  --wallGrad: linear-gradient(160deg,var(--rockwall),var(--rockwall2));
+  --wallShadow: inset 0 3px 0 rgba(255,255,255,.07), inset 0 -4px 0 rgba(0,0,0,.3), inset 0 0 0 1px rgba(0,0,0,.25);
+  --wallRadius: 3px;
+  --holeGrad: radial-gradient(circle at 50% 42%, #000 0%, #0c0805 46%, #241812 66%, var(--sand2) 90%);  /* 縁の砂色を広げて壁と区別しやすく */
+  --goalGrad: linear-gradient(135deg,#2a4a42,#1c352f);
+  --rockGrad: radial-gradient(circle at 36% 30%, #c2b3a0 0%, var(--boulder) 45%, #6f6052 100%);
+  --rockShadow: 0 4px 0 rgba(0,0,0,.35), inset -3px -5px 0 rgba(0,0,0,.18), inset 3px 4px 0 rgba(255,255,255,.18);
+  --rockRadius: 46%;
+  --fillGrad: radial-gradient(circle at 38% 32%, #8c7c6b, #6b5c4c 70%);
+  --headColor:#e8b88c; --hatColor:#b6452f; --eyeColor:#2b1c12;
+  --torsoGrad: linear-gradient(#3f6e64,#31564e);
+  --tileGap: 0px;
+  --boardRadius: 10px;
+  --tileRadius: 0px;
+  --dimText:#8d7458;
+  --stepText:#cdb592;
+  --titleShadow: 0 2px 0 #000;
+  --boardPad: 0px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  background: var(--bodyBg);
+  background-attachment: fixed;
+  color:var(--ink);
+  font-family: var(--gameFont);
+  display:flex;flex-direction:column;align-items:center;
+  overflow:hidden;
+  height:100dvh;
+  touch-action:none;
+  user-select:none;-webkit-user-select:none;
+}
+header{
+  width:100%;max-width:520px;
+  padding:8px 14px 2px;
+  display:flex;align-items:flex-start;justify-content:space-between;
+  flex:0 0 auto;
+}
+/* タイトル→ステージ名→ステージ選択を縦積み */
+#hdrLeft{display:flex;flex-direction:column;align-items:flex-start;gap:5px;}
+h1{
+  font-size:22px;letter-spacing:3px;font-weight:normal;
+  color:var(--accent);
+  text-shadow:var(--titleShadow);
+}
+#stageName{font-size:12px;color:var(--stepText);letter-spacing:1px;}
+#langBtn, #themeBtn, #charBtn2, #helpBtn{
+  font-family:inherit;color:var(--ink);background:var(--panel);
+  border:2px solid var(--panelBorder);border-radius:8px;padding:4px 10px;
+  font-size:12px;cursor:pointer;letter-spacing:1px;
+}
+/* ヘッダーのボタンを2段グリッドで表示(🎵含め5個=3+2) */
+#hdrBtns{display:grid;grid-template-columns:repeat(3,auto);gap:6px;flex:0 0 auto;}
+#hdrBtns button{
+  width:46px;height:38px;padding:0;position:relative;
+  display:flex;align-items:center;justify-content:center;
+}
+/* 見た目を変えずにタップ領域を44pt相当まで拡張 */
+#hdrBtns button::before{content:'';position:absolute;inset:-3px;}
+#charBtn2{
+  width:48px;height:32px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+}
+#charBtn2 .topCharPreview{
+  width:26px;height:26px;position:relative;display:block;
+  overflow:hidden;border-radius:50%;
+}
+#charBtn2 .topCharPreview .player{
+  position:relative;width:26px;height:26px;display:block;
+}
+#charBtn2 .topCharPreview .player .body{
+  width:26px;height:28px;left:0;top:0;
+  filter:none;
+}
+#charBtn2 .topCharPreview .player .head{
+  width:100%;height:94%;top:3%;left:0;
+}
+#charBtn2 .topCharPreview .player .torso{
+  display:none;
+}
+#langBtn:active, #themeBtn:active, #charBtn2:active, #helpBtn:active{transform:translateY(1px);}
+#topbar{
+  width:100%;max-width:520px;
+  padding:2px 14px 4px;
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;
+  flex:0 0 auto;
+}
+#stageNav{display:flex;align-items:center;gap:6px;}
+#stageNav button{
+  font-family:inherit;color:var(--ink);
+  background:var(--panel);border:2px solid var(--panelBorder);border-radius:8px;
+  padding:5px 10px;font-size:13px;cursor:pointer;letter-spacing:1px;
+}
+#stageNav button:active{transform:translateY(1px);}
+#prevStage,#nextStage{min-width:34px;font-size:14px;}
+#stagePick{min-width:78px;color:var(--accent);border-color:var(--accent);}
+#edBackBtn{
+  display:none;z-index:30;font-family:inherit;font-size:13px;cursor:pointer;
+  background:var(--accent);color:#10100c;border:none;border-radius:10px;
+  padding:8px 14px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.4);
+}
+#stagePick:disabled,#prevStage:disabled,#nextStage:disabled{opacity:.35;}
+/* ============================================================
+   モダンテーマ群(レトロUIはデフォルトの:rootで完全保持)
+   body に theme-xxx クラスを付けて切り替える
+   ============================================================ */
+
+/* ---- テーマ3: 自然光 & 3D風(立体的・温かみ) ---- */
+body.theme-natural{
+  --cave:#3a3228; --cave2:#473d30; --ink:#f7efe0; --accent:#ffb454;
+  --rune:#6fe0b0;
+  --bodyBg: linear-gradient(170deg,#5a4d3a 0%, #2e271d 75%);
+  --gameFont: 'Outfit','Quicksand',-apple-system,system-ui,sans-serif;
+  --panel:#473d30; --panelBorder:#6b5a44;
+  --boardBg: linear-gradient(160deg,#5c4f3c,#3e3527);
+  --boardShadow: 0 2px 0 #2a2319, 0 20px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.1);
+  --floorGrad: linear-gradient(145deg,#d9c19a 0%,#c3a878 100%);
+  --floorInset: inset 0 1px 0 rgba(255,255,255,.3), inset 0 -3px 5px rgba(0,0,0,.12);
+  --wallGrad: linear-gradient(160deg,#7a6347,#5a4730);
+  --wallShadow: inset 0 4px 0 rgba(255,255,255,.12), inset 0 -6px 8px rgba(0,0,0,.4), 0 3px 6px rgba(0,0,0,.3);
+  --wallRadius:5px;
+  --holeGrad: radial-gradient(circle at 50% 38%, #000 0%, #140d06 50%, #3a2a18 80%, #c3a878 100%);
+  --goalGrad: radial-gradient(circle at 50% 40%, #3a6b5a, #25453a);
+  --rockGrad: radial-gradient(circle at 33% 26%, #e8dcc8 0%, #b0a088 42%, #6b5d48 100%);
+  --rockShadow: 0 6px 10px rgba(0,0,0,.45), inset -4px -6px 8px rgba(0,0,0,.25), inset 4px 5px 8px rgba(255,255,255,.35);
+  --rockRadius:48%;
+  --fillGrad: radial-gradient(circle at 38% 30%, #9a8a70, #6b5d48 70%);
+  --headColor:#eab98c; --hatColor:#c85a3a; --eyeColor:#2b1c12;
+  --torsoGrad: linear-gradient(#4a8270,#356152);
+  --boardRadius:14px; --tileRadius:4px; --boardPad:5px; --tileGap:2px;
+  --dimText:#a8957a; --stepText:#e0d2ba; --titleShadow:0 3px 4px rgba(0,0,0,.5);
+}
+
+/* ---- テーマ4: とにかく派手で爽快 ---- */
+body.theme-vivid{
+  --cave:#1a0b2e; --cave2:#2a1248; --ink:#fff6ff; --accent:#ffd000; --rune:#00ffa3;
+  --bodyBg: linear-gradient(135deg,#ff2e88 0%, #8a2be2 40%, #1a0b2e 100%);
+  --gameFont: 'Baloo 2','Fredoka',-apple-system,system-ui,sans-serif;
+  --panel:#2a1248; --panelBorder:#ff2e88;
+  --boardBg: linear-gradient(160deg,#3a1a5e,#1f0d38);
+  --boardShadow: 0 0 0 3px #ff2e88, 0 0 0 6px #ffd000, 0 16px 44px rgba(255,46,136,.4);
+  --floorGrad: linear-gradient(135deg,#5e3a8e,#46256e);
+  --floorInset: inset 0 0 0 1px rgba(255,255,255,.12), inset 0 2px 0 rgba(255,255,255,.18);
+  --wallGrad: linear-gradient(160deg,#ff2e88,#b81e5e);
+  --wallShadow: inset 0 3px 0 rgba(255,255,255,.3), inset 0 -4px 0 rgba(0,0,0,.2), 0 0 12px rgba(255,46,136,.5);
+  --wallRadius:6px;
+  --holeGrad: radial-gradient(circle at 50% 42%, #000 0%, #1a0b2e 55%, #46256e 90%);
+  --goalGrad: radial-gradient(circle at 50% 50%, rgba(0,255,163,.3), #1f0d38);
+  --rockGrad: radial-gradient(circle at 35% 28%, #fff 0%, #ffd000 40%, #ff8a00 100%);
+  --rockShadow: 0 0 18px rgba(255,208,0,.7), inset -3px -4px 0 rgba(0,0,0,.2), inset 3px 4px 4px rgba(255,255,255,.6);
+  --rockRadius:32%;
+  --fillGrad: radial-gradient(circle at 38% 32%, #5e3a8e, #46256e 70%);
+  --headColor:#ffd6a8; --hatColor:#00ffa3; --eyeColor:#2a1248;
+  --torsoGrad: linear-gradient(#ffd000,#ff8a00);
+  --boardRadius:16px; --tileRadius:7px; --boardPad:6px; --tileGap:3px;
+  --dimText:#c89adf; --stepText:#ffd6f5; --titleShadow:0 0 14px rgba(255,208,0,.9),2px 2px 0 #ff2e88;
+}
+body.theme-vivid h1{text-shadow:0 0 14px rgba(255,208,0,.9),2px 2px 0 #ff2e88;}
+
+/* ---- テーマ5: 森の絵本(やわらかい緑と木漏れ日) ---- */
+body.theme-forest{
+  --cave:#243225; --cave2:#31442f; --ink:#fff6dc; --accent:#f0c86a; --rune:#8be0a0;
+  --bodyBg: radial-gradient(circle at 35% 0%, rgba(255,220,135,.22), transparent 34%), linear-gradient(180deg,#2f4a31,#172519 78%);
+  --gameFont:'Baloo 2','Hiragino Sans',system-ui,sans-serif;
+  --panel:#31442f; --panelBorder:#5e744d; --boardBg:#243225;
+  --boardShadow:0 0 0 3px #142016,0 0 0 6px #5e744d,0 18px 42px rgba(0,0,0,.45);
+  --floorGrad:linear-gradient(145deg,#d9c98f,#bba66a); --floorInset:inset 0 1px 0 rgba(255,255,255,.28), inset 0 -3px 5px rgba(95,70,25,.18);
+  --wallGrad:linear-gradient(160deg,#5d4a32,#3d3022); --wallShadow:inset 0 3px 0 rgba(255,255,255,.08), inset 0 -5px 0 rgba(0,0,0,.25);
+  --wallRadius:8px; --holeGrad:radial-gradient(circle at 50% 42%,#0a0805 0%,#1b140b 58%,#5d4a32 100%);
+  --goalGrad:radial-gradient(circle at 50% 50%,rgba(139,224,160,.35),#234837);
+  --rockGrad:radial-gradient(circle at 35% 28%,#d9d0ba,#92866d 60%,#5d5548 100%);
+  --rockShadow:0 5px 9px rgba(0,0,0,.36), inset -4px -5px 0 rgba(0,0,0,.18), inset 3px 4px 0 rgba(255,255,255,.24);
+  --rockRadius:48%; --fillGrad:radial-gradient(circle at 38% 32%,#92866d,#5d5548 72%);
+  --headColor:#ffd8ac; --hatColor:#7cb15b; --eyeColor:#2b1c12; --torsoGrad:linear-gradient(#7bb56b,#4d8245);
+  --boardRadius:18px; --tileRadius:7px; --boardPad:6px; --tileGap:3px; --dimText:#9fb28d; --stepText:#f0dfb5; --titleShadow:0 3px 0 rgba(0,0,0,.35);
+}
+
+/* ---- テーマ7: 8ビットヒーロー(青いレトロSF) ---- */
+body.theme-hero8{
+  --cave:#071125; --cave2:#101f3d; --ink:#eaf6ff; --accent:#4ab4ff; --rune:#7cffd6;
+  --bodyBg:linear-gradient(180deg,#10234b,#050914);
+  --gameFont:'Orbitron','DotGothic16',system-ui,sans-serif;
+  --panel:#101f3d; --panelBorder:#294c91; --boardBg:#081225;
+  --boardShadow:0 0 0 2px #4ab4ff,0 0 0 5px #10234b,0 0 28px rgba(74,180,255,.25);
+  --floorGrad:linear-gradient(135deg,#14346a,#0c2146); --floorInset:inset 0 0 0 1px rgba(124,255,214,.14);
+  --wallGrad:linear-gradient(160deg,#275fbf,#173878); --wallShadow:inset 0 0 0 2px rgba(124,255,214,.25), inset 0 -4px 0 rgba(0,0,0,.28);
+  --wallRadius:2px; --holeGrad:radial-gradient(circle at 50% 45%,#000,#051023 65%,#14346a 100%);
+  --goalGrad:radial-gradient(circle at 50% 50%,rgba(124,255,214,.32),#071b2f);
+  --rockGrad:radial-gradient(circle at 35% 28%,#d7f8ff,#4ab4ff 45%,#1252a2 100%);
+  --rockShadow:0 0 12px rgba(74,180,255,.55), inset -3px -4px 0 rgba(0,0,0,.25), inset 3px 4px 0 rgba(255,255,255,.35);
+  --rockRadius:22%; --fillGrad:radial-gradient(circle at 38% 32%,#173878,#0c2146 72%);
+  --headColor:#d4e7ff; --hatColor:#4ab4ff; --eyeColor:#061225; --torsoGrad:linear-gradient(#4ab4ff,#173878);
+  --boardRadius:6px; --tileRadius:2px; --boardPad:4px; --tileGap:2px; --dimText:#6282c5; --stepText:#9ec8ff; --titleShadow:0 0 10px rgba(74,180,255,.9);
+}
+
+/* ---- テーマ8: 和風庭園(石畳・苔・朱色) ---- */
+body.theme-zen{
+  --cave:#161a14; --cave2:#243022; --ink:#f7efd8; --accent:#d94b34; --rune:#8fd4b0;
+  --bodyBg:radial-gradient(circle at 50% 0%,rgba(143,212,176,.16),transparent 34%),linear-gradient(180deg,#243022,#10140f);
+  --gameFont:'DotGothic16','Hiragino Mincho ProN','Hiragino Sans',serif;
+  --panel:#243022; --panelBorder:#516049; --boardBg:#192018;
+  --boardShadow:0 0 0 3px #0b0f0b,0 0 0 6px #516049,0 18px 40px rgba(0,0,0,.5);
+  --floorGrad:linear-gradient(145deg,#b8b09b,#918a78); --floorInset:inset 0 0 0 1px rgba(255,255,255,.12), inset 0 -3px 0 rgba(0,0,0,.12);
+  --wallGrad:linear-gradient(160deg,#3d4938,#263122); --wallShadow:inset 0 3px 0 rgba(255,255,255,.06), inset 0 -5px 0 rgba(0,0,0,.3);
+  --wallRadius:4px; --holeGrad:radial-gradient(circle at 50% 42%,#050605,#121810 62%,#918a78 100%);
+  --goalGrad:radial-gradient(circle at 50% 50%,rgba(217,75,52,.22),#341816);
+  --rockGrad:radial-gradient(circle at 35% 28%,#d7d0c2,#8d887e 58%,#4f4c48 100%);
+  --rockShadow:0 5px 9px rgba(0,0,0,.42), inset -4px -5px 0 rgba(0,0,0,.22), inset 3px 4px 0 rgba(255,255,255,.2);
+  --rockRadius:46%; --fillGrad:radial-gradient(circle at 38% 32%,#78736a,#4f4c48 72%);
+  --headColor:#f1caa6; --hatColor:#d94b34; --eyeColor:#2b1c12; --torsoGrad:linear-gradient(#3f7b5b,#28533f);
+  --boardRadius:12px; --tileRadius:3px; --boardPad:5px; --tileGap:2px; --dimText:#839178; --stepText:#d9ceb4; --titleShadow:0 2px 0 #000;
+}
+
+/* タイル間ギャップを演出(モダンテーマ向け)。JSは触らず、boxのinsetで隙間を作る */
+body.theme-natural .tile, body.theme-vivid .tile,
+body.theme-forest .tile, body.theme-hero8 .tile,
+body.theme-zen .tile{
+  outline:var(--tileGap) solid var(--boardBg);
+  outline-offset:calc(var(--tileGap) * -1);
+}
+
+/* スムーズなテーマ遷移 */
+body, #board, .tile, .ent .rock, button{
+  transition: background-color .4s ease, color .4s ease, box-shadow .4s ease, border-color .4s ease;
+}
+
+/* キャラ選択モーダル */
+#charPicker{
+  position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;z-index:30;padding:18px;
+}
+#charPicker.show{display:flex;}
+#charBox{
+  background:var(--panel);border:2px solid var(--panelBorder);border-radius:16px;
+  width:100%;max-width:520px;max-height:86vh;overflow-y:auto;
+  padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);
+}
+#charBox h3{
+  font-weight:normal;font-size:16px;color:var(--accent);letter-spacing:1px;
+  margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;
+}
+#charClose{
+  font-family:inherit;background:var(--cave);color:var(--ink);
+  border:2px solid var(--panelBorder);border-radius:8px;padding:4px 12px;font-size:14px;cursor:pointer;
+}
+#charGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.charCard{
+  border:2px solid var(--panelBorder);border-radius:12px;padding:10px 6px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:6px;font-family:inherit;
+  background:var(--cave);position:relative;min-height:96px;justify-content:center;
+}
+.charCard.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;}
+.charCard.locked{opacity:.55;}
+.charCard .cName{font-size:12px;color:var(--ink);}
+.charCard .cLock{font-size:10px;color:var(--dimText);line-height:1.3;text-align:center;}
+.charCard .preview{width:52px;height:52px;position:relative;display:flex;align-items:center;justify-content:center;}
+/* プレビュー内のミニキャラ(playerと同じ構造を縮小) */
+.charCard .preview .player{position:relative;width:46px;height:46px;}
+.charCard .preview .player .body{width:46px;height:46px;left:0;top:0;}
+
+/* テーマ選択モーダル */
+#themePicker{
+  position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;z-index:30;padding:18px;
+}
+#themePicker.show{display:flex;}
+#themeBox{
+  background:var(--panel);border:2px solid var(--panelBorder);border-radius:16px;
+  width:100%;max-width:520px;max-height:88vh;overflow-y:auto;
+  padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);
+}
+#themeBox h3{
+  font-weight:normal;font-size:16px;color:var(--accent);letter-spacing:1px;
+  margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;
+}
+#themeClose{
+  font-family:inherit;background:var(--cave);color:var(--ink);
+  border:2px solid var(--panelBorder);border-radius:8px;padding:4px 12px;font-size:14px;cursor:pointer;
+}
+#themeGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.themeCard{
+  border:2px solid var(--panelBorder);border-radius:12px;padding:14px 12px;cursor:pointer;
+  display:flex;flex-direction:column;gap:8px;font-family:inherit;color:#fff;
+  position:relative;overflow:hidden;min-height:84px;text-align:left;
+  transition:transform .15s ease;
+}
+.themeCard:active{transform:scale(.97);}
+.themeCard .tName{font-size:15px;font-weight:700;}
+.themeCard .tDesc{font-size:11px;opacity:.85;line-height:1.4;}
+.themeCard .swatch{display:flex;gap:4px;margin-top:auto;}
+.themeCard .swatch i{width:16px;height:16px;border-radius:50%;display:block;}
+.themeCard.sel{outline:3px solid #fff;outline-offset:1px;}
+.themeCard .tCheck{position:absolute;top:8px;right:10px;font-size:14px;}
+.tc-retro{background:linear-gradient(135deg,#2e211a,#221813);}
+.tc-natural{background:linear-gradient(135deg,#5c4f3c,#2e271d);}
+.tc-vivid{background:linear-gradient(135deg,#ff2e88,#8a2be2);}
+.tc-forest{background:linear-gradient(135deg,#2f4a31,#172519);}
+.tc-hero8{background:linear-gradient(135deg,#10234b,#050914);}
+.tc-zen{background:linear-gradient(135deg,#243022,#10140f);}
+
+/* あそびかた(ヘルプ) */
+#helpPicker{
+  position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;z-index:30;padding:18px;
+}
+#helpPicker.show{display:flex;}
+#helpBox{
+  background:var(--panel);border:2px solid var(--panelBorder);border-radius:16px;
+  width:100%;max-width:520px;max-height:88vh;overflow-y:auto;
+  padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);
+}
+#helpBox h3{
+  font-weight:normal;font-size:16px;color:var(--accent);letter-spacing:1px;
+  margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;
+}
+#helpBox h3 button{
+  font-family:inherit;background:var(--cave);color:var(--ink);
+  border:2px solid var(--panelBorder);border-radius:8px;padding:6px 12px;font-size:12px;
+}
+.helpSection{font-size:13px;color:var(--accent);letter-spacing:1px;margin:14px 0 2px;}
+.helpItem{display:flex;gap:12px;align-items:flex-start;padding:9px 4px;border-bottom:1px solid var(--panelBorder);}
+.helpItem:last-child{border-bottom:none;}
+.hIcon{
+  width:44px;height:44px;flex:0 0 44px;display:flex;align-items:center;justify-content:center;
+  font-size:24px;background:var(--cave);border:2px solid var(--panelBorder);border-radius:10px;
+}
+.hName{font-size:14px;font-weight:700;margin-bottom:3px;color:var(--ink);}
+.hDesc{font-size:12px;line-height:1.65;color:var(--dimText);}
+/* 刃アイコン: ゲーム内タイル(.tile.blade::before)と同じ描画のミニチュア */
+.hIcon .hBlade{
+  display:block;width:30px;height:20px;margin-top:14px;
+  background:repeating-linear-gradient(90deg,
+    #c7ced6 0, #c7ced6 8%, #8b949e 8%, #8b949e 16%);
+  clip-path:polygon(0 100%,8% 0,16% 100%,24% 0,32% 100%,40% 0,48% 100%,56% 0,64% 100%,72% 0,80% 100%,88% 0,96% 100%,100% 60%,100% 100%);
+  filter:drop-shadow(0 -1px 1px rgba(0,0,0,.4));
+}
+
+#picker{
+  position:fixed;inset:0;background:rgba(10,6,3,.85);
+  display:none;align-items:center;justify-content:center;z-index:20;padding:18px;
+}
+#picker.show{display:flex;}
+#pickerBox{
+  background:var(--panel);border:2px solid var(--panelBorder);border-radius:14px;
+  width:100%;max-width:440px;max-height:80vh;overflow-y:auto;
+  padding:16px;box-shadow:0 14px 40px rgba(0,0,0,.6);
+}
+#pickerBox h3{
+  font-weight:normal;font-size:16px;color:var(--accent);letter-spacing:2px;
+  margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;
+}
+#pickerClose{
+  font-family:inherit;background:var(--cave);color:var(--ink);
+  border:2px solid var(--panelBorder);border-radius:8px;padding:4px 12px;font-size:14px;cursor:pointer;
+}
+#pickGrid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;}
+#myCourses{
+  position:fixed;inset:0;background:rgba(10,6,3,.85);
+  display:none;align-items:center;justify-content:center;z-index:21;padding:18px;
+}
+#myCourses.show{display:flex;}
+#myCoursesBox{
+  background:var(--panel);border:2px solid var(--panelBorder);border-radius:14px;
+  width:100%;max-width:440px;max-height:80vh;overflow-y:auto;
+  padding:16px;box-shadow:0 14px 40px rgba(0,0,0,.6);
+}
+#myCoursesBox h3{
+  font-weight:normal;font-size:16px;color:var(--accent);letter-spacing:2px;
+  margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;
+}
+#myCoursesClose{
+  font-family:inherit;background:var(--cave);color:var(--ink);
+  border:2px solid var(--panelBorder);border-radius:8px;padding:4px 12px;font-size:14px;cursor:pointer;
+}
+#myCoursesList{display:flex;flex-direction:column;gap:8px;}
+.courseItem{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:var(--cave2);border:2px solid var(--panelBorder);border-radius:10px;padding:10px 12px;
+}
+.courseItem .cName{flex:1 1 100%;color:var(--ink);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.courseItem .cMeta{color:var(--stepText);font-size:11px;margin-right:auto;}
+.courseItem button{
+  font-family:inherit;border:2px solid var(--panelBorder);border-radius:8px;
+  padding:6px 12px;font-size:13px;cursor:pointer;flex:0 0 auto;
+}
+.courseItem .cPlay{background:var(--accent);color:#10100c;border-color:var(--accent);}
+.courseItem .cLink{background:var(--cave);color:var(--ink);}
+.courseItem .cDel{background:var(--cave);color:#d98a6a;}
+#myCoursesEmpty{color:var(--stepText);font-size:14px;text-align:center;padding:20px;}
+.endlessStartBtn{
+  width:100%;margin-bottom:14px;font-family:inherit;cursor:pointer;
+  background:linear-gradient(135deg,var(--accent),var(--rune));
+  color:#10100c;font-size:15px;font-weight:700;letter-spacing:1px;
+  border:none;border-radius:10px;padding:12px;
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+.endlessStartBtn:active{transform:translateY(2px);}
+.editorStartBtn{
+  width:100%;margin-bottom:14px;font-family:inherit;cursor:pointer;
+  background:var(--cave);color:var(--ink);font-size:15px;font-weight:700;letter-spacing:1px;
+  border:2px solid var(--panelBorder);border-radius:10px;padding:11px;
+}
+.editorStartBtn:active{transform:translateY(2px);}
+/* ===== チュートリアル ===== */
+#tutorial{
+  position:fixed;inset:0;z-index:50;display:none;
+  align-items:flex-end;justify-content:center;padding:24px;
+  background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+}
+#tutorial.show{display:flex;animation:tutFade .3s ease;}
+@keyframes tutFade{from{opacity:0;}to{opacity:1;}}
+#tutCard{
+  background:var(--panel);border:2px solid var(--accent);border-radius:18px;
+  max-width:420px;width:100%;padding:22px;text-align:center;
+  box-shadow:0 20px 50px rgba(0,0,0,.6);
+  margin-bottom:30px;
+}
+#tutIcon{font-size:44px;margin-bottom:8px;animation:tutBob 1.6s ease-in-out infinite;}
+@keyframes tutBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
+#tutText{color:var(--ink);font-size:15px;line-height:1.8;margin-bottom:16px;}
+#tutBtns{display:flex;gap:10px;justify-content:center;}
+#tutBtns button{
+  font-family:inherit;border-radius:10px;padding:10px 20px;font-size:14px;cursor:pointer;
+}
+#tutSkip{background:var(--cave);color:var(--dimText);border:2px solid var(--panelBorder);}
+#tutNext{background:linear-gradient(135deg,var(--accent),var(--rune));color:#10100c;border:none;font-weight:700;}
+#tutDots{display:flex;gap:6px;justify-content:center;margin-top:14px;}
+#tutDots i{width:7px;height:7px;border-radius:50%;background:var(--panelBorder);display:block;}
+#tutDots i.on{background:var(--accent);}
+#editor{
+  position:fixed;inset:0;z-index:40;background:var(--bodyBg);
+  display:none;flex-direction:column;align-items:center;
+  padding:10px;gap:8px;overflow:hidden;
+}
+#editor.show{display:flex;}
+#editorBar{
+  width:100%;max-width:520px;display:flex;align-items:center;justify-content:space-between;
+  flex:0 0 auto;
+}
+#editorTitle{font-size:18px;color:var(--accent);letter-spacing:2px;}
+#editorExit{
+  font-family:inherit;background:var(--panel);color:var(--ink);
+  border:2px solid var(--panelBorder);border-radius:8px;padding:5px 12px;font-size:13px;cursor:pointer;
+}
+#editorPalette{
+  width:100%;max-width:520px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;flex:0 0 auto;
+}
+.palBtn{
+  font-family:inherit;background:var(--panel);color:var(--ink);
+  border:2px solid var(--panelBorder);border-radius:8px;padding:7px 10px;font-size:13px;cursor:pointer;
+}
+.palBtn.sel{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;}
+#editorOpts{display:flex;gap:10px;flex:0 0 auto;align-items:center;justify-content:center;flex-wrap:wrap;}
+.optSel{display:flex;align-items:center;gap:5px;color:var(--stepText);font-size:13px;}
+.optSel select{
+  font-family:inherit;background:var(--panel);color:var(--ink);
+  border:2px solid var(--panelBorder);border-radius:8px;padding:5px 8px;font-size:14px;cursor:pointer;
+}
+#edBreakVal{min-width:20px;text-align:center;font-size:16px;color:var(--accent);}
+#editorBoardWrap{flex:1 1 auto;width:100%;display:flex;align-items:center;justify-content:center;min-height:0;padding:4px;}
+#editorBoard{position:relative;background:var(--boardBg);border-radius:var(--boardRadius);box-shadow:var(--boardShadow);}
+.eTile{position:absolute;box-sizing:border-box;border:1px solid rgba(0,0,0,.15);}
+#editorMsg{font-size:13px;min-height:18px;text-align:center;flex:0 0 auto;color:var(--stepText);}
+#editorMsg.ok{color:var(--rune);}
+#editorMsg.ng{color:#ff6b6b;}
+#editorActions{
+  width:100%;max-width:520px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;flex:0 0 auto;
+}
+#editorActions button{
+  font-family:inherit;background:var(--panel);color:var(--ink);
+  border:2px solid var(--panelBorder);border-radius:10px;padding:10px 14px;font-size:14px;cursor:pointer;
+}
+#editorActions button:disabled{opacity:.4;}
+#edShare:not(:disabled){background:linear-gradient(135deg,var(--accent),var(--rune));color:#10100c;border:none;font-weight:700;}
+#edSaveRow{
+  width:100%;max-width:520px;display:flex;gap:8px;justify-content:center;align-items:center;flex:0 0 auto;flex-wrap:wrap;
+  margin-bottom:18px;padding:12px;background:var(--cave2);border:2px solid var(--accent);border-radius:12px;
+}
+#edNameInput{
+  font-family:inherit;background:var(--cave2);color:var(--ink);
+  border:2px solid var(--accent);border-radius:8px;padding:9px 12px;font-size:15px;flex:1 1 140px;min-width:0;max-width:220px;
+}
+#edSaveRow button{
+  font-family:inherit;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer;border:2px solid var(--panelBorder);
+}
+#edSaveConfirm{background:var(--accent);color:#10100c;border-color:var(--accent);font-weight:700;}
+#edSaveCancel{background:var(--cave);color:var(--ink);}
+.chip{
+  aspect-ratio:1/1;border-radius:7px;
+  background:var(--cave);border:2px solid var(--panelBorder);
+  color:var(--dimText);font-family:inherit;font-size:15px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.chip.cur{border-color:var(--accent);color:var(--accent);}
+.chip.done{color:var(--rune);border-color:#2d6b5d;}
+.chip.done::after{content:'✓';font-size:10px;position:absolute;margin:18px 0 0 16px;}
+.chip.perfect{border-color:var(--accent);}
+.chip.perfect::after{content:'★';color:var(--accent);}
+.chip.locked{
+  opacity:.42;cursor:not-allowed;color:var(--dimText);
+  filter:grayscale(.7);
+}
+.chip.locked::before{content:'🔒';font-size:13px;}
+.chip.locked{font-size:0;}
+#hud{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:90px;}
+#steps{font-size:12px;color:var(--stepText);text-align:right;}
+#bestRec{font-size:11px;color:var(--rune);text-align:right;min-height:13px;letter-spacing:.5px;}
+#boardWrap{
+  flex:1 1 auto;width:100%;display:flex;align-items:center;justify-content:center;
+  padding:6px;min-height:0;
+}
+#board{
+  position:relative;
+  background:var(--boardBg);
+  border-radius:var(--boardRadius);
+  box-shadow:var(--boardShadow);
+  padding:var(--boardPad);
+  transition:background .4s, box-shadow .4s;
+}
+.tile{position:absolute;}
+.tile.floor{
+  background:var(--floorGrad);
+  box-shadow:var(--floorInset);
+  border-radius:var(--tileRadius);
+}
+.tile.floor.alt{filter:brightness(.95);}
+.tile.wall{
+  background:var(--wallGrad);
+  box-shadow:var(--wallShadow);
+  border-radius:var(--wallRadius);
+}
+.tile.hole{
+  background:var(--holeGrad);
+  box-shadow:inset 0 4px 8px #000;
+  border-radius:var(--tileRadius);
+}
+.tile.filled{
+  background:var(--floorGrad);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.13);
+  border-radius:var(--tileRadius);
+}
+.tile.filled::after{
+  content:'';position:absolute;inset:14%;
+  border-radius:50%;
+  background:var(--fillGrad);
+  box-shadow:inset 0 -4px 6px rgba(0,0,0,.45), 0 0 0 3px rgba(0,0,0,.18);
+  opacity:.9;
+}
+.tile.goal{
+  background:var(--goalGrad);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.3);
+  border-radius:var(--tileRadius);
+}
+/* ===== 刃(トゲ)のマス ===== */
+.tile.blade{
+  background:var(--floorGrad);
+  box-shadow:var(--floorInset);
+  border-radius:var(--tileRadius);
+  overflow:hidden;
+}
+.tile.blade .spikes{
+  position:absolute;inset:0;
+  background:
+    linear-gradient(135deg, transparent 46%, #9aa3ad 46% 54%, transparent 54%),
+    linear-gradient(45deg, transparent 46%, #9aa3ad 46% 54%, transparent 54%);
+}
+.tile.blade::before{
+  content:'';position:absolute;left:6%;right:6%;bottom:6%;height:46%;
+  background:repeating-linear-gradient(90deg,
+    #c7ced6 0, #c7ced6 8%, #8b949e 8%, #8b949e 16%);
+  clip-path:polygon(0 100%,8% 0,16% 100%,24% 0,32% 100%,40% 0,48% 100%,56% 0,64% 100%,72% 0,80% 100%,88% 0,96% 100%,100% 60%,100% 100%);
+  filter:drop-shadow(0 -1px 1px rgba(0,0,0,.4));
+}
+.tile.blade .spikes{ display:none; }
+/* ===== 氷の床(滑るステージ) ===== */
+#board.slideBoard .tile.floor,
+#board.slideBoard .tile.filled{
+  background:linear-gradient(135deg,#cdeefb 0%,#a6d8f0 50%,#bfe6f7 100%);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.6), inset 0 -3px 6px rgba(120,170,200,.35);
+}
+#board.slideBoard .tile.floor.alt{ filter:brightness(.97); }
+/* 氷の光沢(斜めのハイライト) */
+#board.slideBoard .tile.floor::before{
+  content:'';position:absolute;left:8%;top:8%;width:40%;height:18%;
+  background:linear-gradient(120deg,rgba(255,255,255,.75),rgba(255,255,255,0));
+  border-radius:50%;transform:rotate(-20deg);pointer-events:none;
+}
+#board.slideBoard .tile.hole{
+  background:radial-gradient(circle at 50% 40%, #06314a 0%, #021824 80%);
+  box-shadow:inset 0 4px 10px #000, inset 0 0 0 1px rgba(150,200,230,.3);
+}
+#board.slideBoard .tile.filled::after{
+  background:linear-gradient(145deg,#8fc4e0,#5a93b8);
+}
+.tile.goal::after{
+  content:'';position:absolute;inset:16%;
+  border-radius:50%;
+  border:3px dotted var(--rune);
+  box-shadow:0 0 14px var(--rune), inset 0 0 10px rgba(86,224,195,.5);
+  animation:runePulse 1.6s ease-in-out infinite;
+}
+@keyframes runePulse{
+  0%,100%{transform:scale(1);opacity:.85;}
+  50%{transform:scale(.86);opacity:1;}
+}
+.ent{
+  position:absolute;left:0;top:0;
+  transition:transform .13s cubic-bezier(.34,1.4,.64,1);
+  will-change:transform;
+  display:flex;align-items:center;justify-content:center;
+}
+.boulder{z-index:2;}
+.boulder.sliding{ transition:transform .2s cubic-bezier(.4,.05,.55,1); }
+.boulder .rock{
+  width:86%;height:86%;border-radius:var(--rockRadius);
+  background:var(--rockGrad);
+  box-shadow:var(--rockShadow);
+  position:relative;
+  transition:transform .1s ease;
+}
+.boulder .rock::after{
+  content:'';position:absolute;left:24%;top:40%;width:14%;height:14%;border-radius:50%;
+  background:rgba(0,0,0,.22);
+  box-shadow:160% -90% 0 -1px rgba(0,0,0,.2), 90% 120% 0 -2px rgba(0,0,0,.18);
+}
+/* 押された瞬間、岩が少しめり込む */
+.boulder.pushed .rock{ animation:rockPush .16s ease; }
+@keyframes rockPush{ 0%{transform:scale(1);} 45%{transform:scale(.88);} 100%{transform:scale(1);} }
+/* 岩が壊れる: 砕けて消える */
+.boulder.breaking .rock{ animation:rockCrumble .26s ease-in forwards; }
+@keyframes rockCrumble{
+  0%{ transform:scale(1) rotate(0); }
+  25%{ transform:scale(1.08,.86) rotate(-3deg); }   /* ぐらっと潰れる */
+  50%{ transform:scale(.92,1.04) rotate(3deg); }
+  100%{ transform:scale(.55,.4) translateY(28%) rotate(8deg); opacity:0; filter:blur(1px); }
+}
+/* 砕けた破片 */
+.shard{ position:absolute;background:var(--rockGrad);border-radius:2px;pointer-events:none;z-index:5; }
+@keyframes shardFly{ 0%{opacity:1;} 100%{opacity:0;} }
+/* 壊し残数インジケータ */
+#breakInfo{ font-size:12px;color:var(--accent);letter-spacing:.5px; }
+#breakInfo.flash{ animation:breakFlash .5s ease; }
+@keyframes breakFlash{ 0%,100%{opacity:1;} 25%,75%{opacity:.3;} 50%{opacity:1;transform:scale(1.1);} }
+/* 壊せるステージでは岩がタップ可能に見える */
+.boulder{ cursor:pointer; }
+.player{z-index:3;}
+.player .body{
+  width:74%;height:78%;position:relative;
+  filter:drop-shadow(0 2px 0 rgba(0,0,0,.28)) drop-shadow(0 5px 6px rgba(0,0,0,.18));
+}
+.player .head{
+  position:absolute;top:3%;left:0;transform:none;
+  width:100%;height:88%;border-radius:50% 50% 46% 46%;
+  background:var(--headColor);
+  border:2.5px solid #1a1a1a;
+  box-sizing:border-box;
+  box-shadow:inset -2px -3px 0 rgba(95,45,18,.16), inset 2px 2px 0 rgba(255,255,255,.18);
+  z-index:1;
+}
+.player .hat{
+  position:absolute;top:-11%;left:-7%;width:114%;height:38%;
+  background:linear-gradient(180deg,#d95a3f 0%,var(--hatColor) 62%,#8d2f24 100%);
+  border-radius:52% 52% 22% 22%;
+  border:2.5px solid #1a1a1a;box-sizing:border-box;z-index:2;
+  box-shadow:inset 0 3px 0 rgba(255,255,255,.22);
+}
+.player .eye{
+  position:absolute;top:44%;width:14%;height:18%;background:#1a1a1a;border-radius:50%;
+  transition:all .12s ease;z-index:3;
+}
+.player .eye.l{left:24%;}
+.player .eye.r{right:24%;}
+/* 眉(ふだんは隠れている。表情で出現) */
+.player .brow{
+  position:absolute;top:34%;width:18%;height:7%;background:#1a1a1a;border-radius:3px;
+  opacity:0;transition:all .12s ease;z-index:3;
+}
+.player .brow.l{left:20%;}
+.player .brow.r{right:20%;}
+/* 口(ふだんは小さな点。表情で形が変わる) */
+.player .mouthf{
+  position:absolute;top:72%;left:50%;transform:translateX(-50%);
+  width:14%;height:7%;background:#1a1a1a;border-radius:0 0 50% 50%;
+  transition:all .12s ease;z-index:3;
+}
+.player .torso{
+  display:none;
+}
+
+/* ===== 表情バリエーション(.player に face-xxx を付ける) ===== */
+/* 押す・踏ん張り: ぐっと力む( >< ) */
+.player.face-push .eye{ height:7%;width:17%; border-radius:2px; top:52%; }
+.player.face-push .brow{ opacity:1; top:42%; }
+.player.face-push .brow.l{ transform:rotate(22deg); }
+.player.face-push .brow.r{ transform:rotate(-22deg); }
+.player.face-push .mouthf{ width:13%;height:13%;border-radius:50%;top:72%; }
+/* ぶつかる: 目を回す( @ @ ) */
+.player.face-bump .eye{ width:22%;height:22%;border:3px solid #1a1a1a;background:transparent;border-radius:50%;top:46%; }
+.player.face-bump .eye.l{left:20%;} .player.face-bump .eye.r{right:20%;}
+.player.face-bump .mouthf{ width:18%;height:14%;border-radius:50%; }
+/* 満足(穴を埋めた): にっこり( ^ ^ ) */
+.player.face-happy .eye{ height:6%;width:16%;border-radius:3px;top:52%; }
+.player.face-happy .mouthf{ width:34%;height:17%;border-radius:0 0 70% 70%;background:#1a1a1a; }
+/* 歓喜(ゴール): キラキラ大喜び */
+.player.face-win .eye{ width:17%;height:22%;border-radius:50%;top:46%; }
+.player.face-win .mouthf{ width:40%;height:26%;border-radius:0 0 55% 55%;background:#1a1a1a; }
+.player.face-win .body{ animation:winWiggle .5s ease infinite; }
+@keyframes winWiggle{ 0%,100%{transform:rotate(-5deg);} 50%{transform:rotate(5deg);} }
+/* 不安(詰みかけ): 困り眉+口がへの字 */
+.player.face-worry .brow{ opacity:1;top:38%;height:7%; }
+.player.face-worry .brow.l{ transform:rotate(-24deg); }
+.player.face-worry .brow.r{ transform:rotate(24deg); }
+.player.face-worry .mouthf{ width:26%;height:13%;border-radius:50% 50% 0 0;top:80%; }
+.player.face-worry .eye{ height:20%;width:16%; }
+
+.player.bump{animation:bump .2s ease;}
+@keyframes bump{
+  0%,100%{margin-left:0;margin-top:0;}
+  40%{margin-left:var(--bx,0px);margin-top:var(--by,0px);}
+}
+/* 歩くたびのちょっとした弾み */
+.player.step .body{ animation:hop .14s ease; }
+@keyframes hop{ 0%,100%{transform:translateY(0) scaleY(1);} 50%{transform:translateY(-8%) scaleY(1.05);} }
+
+/* ===== キャラクター別の見た目(フラット&輪郭くっきり) ===== */
+.player .head{ position:relative; }
+.player .part{ position:absolute; }
+
+/* --- 女の子: ぱっつん前髪 + 長い髪 + 明るい丸顔 --- */
+.player.char-girl .body{ width:76%;height:80%; }
+.player.char-girl .head{
+  background:linear-gradient(180deg,#fff4e8 0%,#ffd9bf 100%);
+  border-radius:50% 50% 48% 48%;
+  width:88%;height:82%;top:10%;left:6%;transform:none;
+  box-shadow:inset -2px -3px 0 rgba(220,130,85,.08), inset 2px 2px 0 rgba(255,255,255,.55);
+  overflow:visible;
+  z-index:3;
+}
+.player.char-girl .head::before{
+  display:none;
+}
+.player.char-girl .head::after{
+  content:'';position:absolute;left:12%;right:12%;top:60%;height:13%;
+  background:
+    radial-gradient(circle at 0 50%,rgba(255,142,160,.55) 0 42%,transparent 45%),
+    radial-gradient(circle at 100% 50%,rgba(255,142,160,.55) 0 42%,transparent 45%);
+  z-index:4;pointer-events:none;
+}
+.player.char-girl .hat{
+  background:
+    linear-gradient(90deg,#2c211e 0 16%,transparent 16% 84%,#2c211e 84% 100%),
+    linear-gradient(180deg,#2c211e 0 34%,transparent 35%);
+  height:108%;top:-9%;left:-7%;width:114%;
+  border:none;border-radius:48% 48% 44% 44%;
+  box-shadow:none;z-index:2;
+}
+.player.char-girl .hat::before{
+  content:'';position:absolute;left:9%;right:9%;top:4%;height:24%;
+  background:#2c211e;border-radius:50% 50% 18% 18%;
+  z-index:2;
+}
+.player.char-girl .hat::after{
+  content:'';position:absolute;left:18%;right:18%;top:31%;height:10%;
+  background:#2c211e;
+  border-radius:7px 7px 1px 1px;
+  border-bottom:2px solid #1a1a1a;
+  z-index:3;
+}
+.player.char-girl .torso{
+  display:none;
+}
+.player.char-girl .eye{
+  top:43%;width:16%;height:20%;background:#2a1b16;
+  box-shadow:inset 2px 2px 0 rgba(255,255,255,.45);
+  z-index:5;
+}
+.player.char-girl .eye.l{ left:26%; }
+.player.char-girl .eye.r{ right:26%; }
+.player.char-girl .mouthf{
+  width:24%;height:10%;top:72%;background:#c35c66;
+  border-radius:0 0 50% 50%;z-index:5;
+}
+/* --- 猫: 丸い顔 + 三毛風の模様 + しっぽ --- */
+.player.char-cat .body{ width:74%;height:78%; }
+.player.char-cat .head{
+  background:linear-gradient(180deg,#fff9ed 0%,#f4ead8 100%);
+  border-radius:50% 50% 47% 47%;
+  width:100%;height:92%;top:2%;left:0;transform:none;
+  border:2.5px solid #1a1a1a;
+  box-shadow:inset -3px -5px 0 rgba(120,80,40,.12);
+  overflow:visible;
+}
+.player.char-cat .head::before{
+  content:'';position:absolute;left:6%;top:0;width:38%;height:38%;
+  background:#d68a3c;border-radius:80% 35% 60% 35%;
+  border-right:2px solid #1a1a1a;border-bottom:2px solid #1a1a1a;
+  transform:rotate(-10deg);z-index:1;
+}
+.player.char-cat .head::after{
+  content:'';position:absolute;left:34%;top:54%;width:32%;height:22%;
+  background:#fff;border:2px solid #1a1a1a;border-radius:50%;
+  box-sizing:border-box;z-index:2;
+}
+.player.char-cat .hat{ display:none; }
+.player.char-cat .torso{ display:none; }
+.player.char-cat .tail{
+  display:block;width:34%;height:52%;right:-18%;bottom:6%;
+  border:5px solid #d68a3c;border-left:none;border-bottom:none;
+  border-radius:0 80% 0 0;transform:rotate(22deg);z-index:-1;
+  box-sizing:border-box;
+}
+.player.char-cat .tail::after{
+  content:'';position:absolute;right:-5px;top:-5px;width:10px;height:10px;
+  background:#1a1a1a;border-radius:50%;
+}
+.player.char-cat .ear{
+  width:32%;height:30%;top:-14%;background:#d68a3c;
+  border:2.5px solid #1a1a1a;box-sizing:border-box;z-index:0;
+  clip-path:polygon(50% 0,100% 100%,0 100%);
+}
+.player.char-cat .ear.l{ left:5%; transform:rotate(-14deg); }
+.player.char-cat .ear.r{ right:5%; transform:rotate(14deg); background:#fff9ed; }
+.player.char-cat .ear::after{
+  content:'';position:absolute;left:50%;bottom:8%;transform:translateX(-50%);
+  width:52%;height:52%;background:#f5b8a8;
+  clip-path:polygon(50% 0,100% 100%,0 100%);
+}
+.player.char-cat .eye{ background:#1a1a1a; top:38%; width:13%; height:17%; border-radius:50%; }
+.player.char-cat .eye.l{ left:27%; }
+.player.char-cat .eye.r{ right:27%; }
+.player.char-cat .nose{
+  width:10%;height:8%;background:#d97888;border:2px solid #1a1a1a;
+  border-radius:50% 50% 60% 60%;top:57%;left:45%;z-index:4;box-sizing:border-box;
+}
+.player.char-cat .mouthf{
+  width:20%;height:12%;top:67%;background:transparent;border-bottom:2.5px solid #1a1a1a;
+  border-radius:0 0 50% 50%;z-index:4;
+}
+.player.char-cat .whisker{
+  width:33%;height:2px;background:#1a1a1a;top:61%;z-index:4;
+  box-shadow:0 -7px 0 #1a1a1a,0 7px 0 #1a1a1a;
+}
+.player.char-cat .whisker.l{ left:-22%; transform:rotate(6deg); }
+.player.char-cat .whisker.r{ right:-22%; transform:rotate(-6deg); }
+
+/* --- ロボット: 顔だけメカヘッド + 発光アイ --- */
+.player.char-robot .body{ width:74%;height:78%; }
+.player.char-robot .head{
+  background:linear-gradient(145deg,#eef5ff 0%,#b9c6d6 58%,#7f8da1 100%);
+  border-radius:20%;height:84%;top:5%;left:0;width:100%;transform:none;
+  box-shadow:inset -4px -5px 0 rgba(45,60,80,.22), inset 3px 3px 0 rgba(255,255,255,.55);
+}
+.player.char-robot .hat{ display:none; }
+.player.char-robot .antenna{ width:7%;height:25%;background:#1a1a1a;top:-23%;left:46.5%;border-radius:4px; }
+.player.char-robot .antenna::after{
+  content:'';position:absolute;top:-11px;left:50%;transform:translateX(-50%);
+  width:14px;height:14px;border-radius:50%;background:#ff4d4d;
+  border:2.5px solid #1a1a1a;box-sizing:border-box;
+  box-shadow:0 0 8px rgba(255,77,77,.8);
+}
+.player.char-robot .eye{
+  background:#36e6ff;border-radius:26%;width:18%;height:17%;top:32%;
+  box-shadow:0 0 7px rgba(54,230,255,.8), inset 0 2px 0 rgba(255,255,255,.5);
+}
+.player.char-robot .eye.l{ left:23%; }
+.player.char-robot .eye.r{ right:23%; }
+.player.char-robot .mouth{
+  width:50%;height:13%;top:66%;left:25%;
+  background:repeating-linear-gradient(90deg,#1a1a1a 0 3px,#7f8da1 3px 6px);
+  border:2px solid #1a1a1a;border-radius:3px;box-sizing:border-box;
+}
+.player.char-robot .torso{
+  display:none;
+}
+.player.char-robot .head::after{
+  content:'';position:absolute;left:38%;bottom:8%;width:24%;height:18%;
+  background:#36e6ff;border:2px solid #1a1a1a;border-radius:50%;
+  box-shadow:0 0 7px rgba(54,230,255,.7);box-sizing:border-box;
+}
+.player.char-robot .bolt{ width:10%;height:10%;border-radius:50%;background:#1a1a1a;box-shadow:inset 1px 1px 0 rgba(255,255,255,.4);z-index:4; }
+.player.char-robot .bolt.l{ bottom:18%;left:12%; }
+.player.char-robot .bolt.r{ bottom:18%;right:12%; }
+
+/* --- 宇宙人: ブルーグレーのまんまる顔 + 大きな黒目 --- */
+.player.char-alien .body{ width:76%;height:80%; }
+.player.char-alien .head{
+  background:linear-gradient(180deg,#b9c7d6 0%,#7890a4 100%);
+  border-radius:50%;
+  width:96%;height:96%;top:2%;left:2%;transform:none;
+  box-shadow:inset -4px -5px 0 rgba(35,55,72,.24), inset 3px 3px 0 rgba(255,255,255,.32);
+}
+.player.char-alien .hat{ display:none; }
+.player.char-alien .head::before,
+.player.char-alien .head::after{
+  display:none;
+}
+.player.char-alien .eye{
+  background:#111;border-radius:55% 45% 55% 45%;
+  width:24%;height:13%;top:39%;
+  box-shadow:inset 3px 2px 0 rgba(255,255,255,.18);
+}
+.player.char-alien .eye.l{ left:20%;transform:rotate(13deg); }
+.player.char-alien .eye.r{ right:20%;transform:rotate(-13deg); }
+.player.char-alien .mouthf{
+  width:26%;height:8%;top:72%;background:#1a1a1a;border-radius:0 0 50% 50%;
+}
+.player.char-alien .torso{ display:none; }
+
+/* --- 岩霊: ひび割れた小石の精霊 --- */
+.player.char-stone .body{ width:76%;height:80%; }
+.player.char-stone .head{
+  background:radial-gradient(circle at 36% 30%,#d8d0c4 0%,#a79b8b 54%,#6f6257 100%);
+  border-radius:46% 54% 50% 44%;
+  width:96%;height:92%;top:4%;left:2%;transform:rotate(-3deg);
+  box-shadow:inset -5px -6px 0 rgba(55,45,38,.22), inset 3px 3px 0 rgba(255,255,255,.22);
+}
+.player.char-stone .hat{ display:none; }
+.player.char-stone .head::before{
+  content:'';position:absolute;left:48%;top:8%;width:3px;height:36%;
+  background:#3d332d;transform:rotate(22deg);box-shadow:8px 17px 0 #3d332d;
+}
+.player.char-stone .eye{ background:#52e0c3;width:13%;height:15%;top:43%;box-shadow:0 0 6px rgba(82,224,195,.85); }
+.player.char-stone .eye.l{ left:28%; }
+.player.char-stone .eye.r{ right:28%; }
+.player.char-stone .mouthf{ width:18%;height:7%;top:70%;background:#3d332d;border-radius:0 0 50% 50%; }
+.player.char-stone .torso{ display:none; }
+
+/* --- 穴守り: 暗い穴から光る目だけが見える --- */
+.player.char-holekeeper .body{ width:76%;height:80%; }
+.player.char-holekeeper .head{
+  background:radial-gradient(circle at 50% 46%,#15100d 0%,#050403 58%,#3a2a1f 100%);
+  border-radius:50%;width:96%;height:96%;top:2%;left:2%;transform:none;
+  box-shadow:inset 0 5px 10px #000,0 3px 0 rgba(0,0,0,.35);
+}
+.player.char-holekeeper .hat{ display:none; }
+.player.char-holekeeper .eye{ background:#f3d36d;width:12%;height:12%;top:43%;box-shadow:0 0 8px rgba(243,211,109,.9); }
+.player.char-holekeeper .eye.l{ left:31%; }
+.player.char-holekeeper .eye.r{ right:31%; }
+.player.char-holekeeper .mouthf{ width:24%;height:7%;top:68%;background:#f3d36d;border-radius:50%;opacity:.8; }
+.player.char-holekeeper .torso{ display:none; }
+
+/* --- ルーンの子: 古代文字が光る顔 --- */
+.player.char-rune .body{ width:76%;height:80%; }
+.player.char-rune .head{
+  background:linear-gradient(180deg,#2c4a43,#17322d);
+  border-radius:50%;width:96%;height:96%;top:2%;left:2%;transform:none;
+  box-shadow:inset -4px -5px 0 rgba(0,0,0,.24),0 0 8px rgba(86,224,195,.28);
+}
+.player.char-rune .hat{ display:none; }
+.player.char-rune .head::before{
+  content:'';position:absolute;left:37%;top:18%;width:26%;height:18%;
+  border-left:3px solid #56e0c3;border-right:3px solid #56e0c3;border-bottom:3px solid #56e0c3;
+  transform:rotate(180deg);filter:drop-shadow(0 0 5px #56e0c3);
+}
+.player.char-rune .eye{ background:#56e0c3;width:13%;height:13%;top:45%;box-shadow:0 0 7px #56e0c3; }
+.player.char-rune .eye.l{ left:28%; }
+.player.char-rune .eye.r{ right:28%; }
+.player.char-rune .mouthf{ width:28%;height:5%;top:70%;background:#56e0c3;border-radius:50%;box-shadow:0 0 5px #56e0c3; }
+.player.char-rune .torso{ display:none; }
+
+/* --- 砂玉ちゃん: 砂色の丸顔と小さな石冠 --- */
+.player.char-sand .body{ width:76%;height:80%; }
+.player.char-sand .head{
+  background:radial-gradient(circle at 35% 28%,#ead3a2 0%,#c49f64 62%,#8b6a3c 100%);
+  border-radius:50%;width:96%;height:96%;top:2%;left:2%;transform:none;
+  box-shadow:inset -4px -5px 0 rgba(90,60,25,.18), inset 3px 3px 0 rgba(255,255,255,.18);
+}
+.player.char-sand .hat{
+  background:#7b6a58;top:-10%;left:24%;width:52%;height:24%;
+  clip-path:polygon(0 100%,18% 35%,34% 100%,50% 20%,66% 100%,82% 35%,100% 100%);
+  border:none;filter:drop-shadow(0 2px 0 #1a1a1a);
+}
+.player.char-sand .eye{ background:#3a2a1f;width:12%;height:13%;top:45%; }
+.player.char-sand .eye.l{ left:30%; }
+.player.char-sand .eye.r{ right:30%; }
+.player.char-sand .mouthf{ width:22%;height:7%;top:70%;background:#3a2a1f;border-radius:0 0 50% 50%; }
+.player.char-sand .torso{ display:none; }
+
+/* --- 押し神さま: 額に岩印のゆるい守り神 --- */
+.player.char-pushgod .body{ width:76%;height:80%; }
+.player.char-pushgod .head{
+  background:linear-gradient(180deg,#f4dfb8,#cfa36a);
+  border-radius:50%;width:96%;height:96%;top:2%;left:2%;transform:none;
+  box-shadow:inset -4px -5px 0 rgba(95,60,25,.18);
+}
+.player.char-pushgod .hat{ display:none; }
+.player.char-pushgod .head::before{
+  content:'';position:absolute;left:41%;top:13%;width:18%;height:16%;
+  background:radial-gradient(circle at 35% 30%,#b9afa3,#6e6258);
+  border:2px solid #1a1a1a;border-radius:44%;box-sizing:border-box;
+}
+.player.char-pushgod .brow{ opacity:1;top:34%;height:8%; }
+.player.char-pushgod .brow.l{ left:20%;transform:rotate(-18deg); }
+.player.char-pushgod .brow.r{ right:20%;transform:rotate(18deg); }
+.player.char-pushgod .eye{ background:#1a1a1a;width:12%;height:13%;top:47%; }
+.player.char-pushgod .eye.l{ left:29%; }
+.player.char-pushgod .eye.r{ right:29%; }
+.player.char-pushgod .mouthf{ width:30%;height:10%;top:70%;background:#1a1a1a;border-radius:0 0 50% 50%; }
+.player.char-pushgod .torso{ display:none; }
+
+/* --- 発掘ロボ: ヘルメットライト付きの遺跡用ロボ --- */
+.player.char-digbot .body{ width:76%;height:80%; }
+.player.char-digbot .head{
+  background:linear-gradient(145deg,#d8c3a0,#8f7c63);
+  border-radius:22%;width:96%;height:88%;top:6%;left:2%;transform:none;
+  box-shadow:inset -4px -5px 0 rgba(65,50,36,.24), inset 3px 3px 0 rgba(255,255,255,.25);
+}
+.player.char-digbot .hat{
+  background:linear-gradient(180deg,#ffcf4d,#c58623);
+  top:-7%;left:6%;width:88%;height:30%;border-radius:50% 50% 22% 22%;
+}
+.player.char-digbot .hat::after{
+  content:'';position:absolute;left:39%;top:20%;width:22%;height:36%;
+  background:#fff8a8;border:2px solid #1a1a1a;border-radius:50%;box-shadow:0 0 7px rgba(255,248,168,.9);
+}
+.player.char-digbot .eye{ background:#36e6ff;width:13%;height:13%;top:43%;box-shadow:0 0 6px rgba(54,230,255,.8); }
+.player.char-digbot .eye.l{ left:29%; }
+.player.char-digbot .eye.r{ right:29%; }
+.player.char-digbot .mouthf{ width:34%;height:9%;top:68%;background:#1a1a1a;border-radius:3px; }
+.player.char-digbot .torso{ display:none; }
+
+/* --- 王様: 顔だけの王冠 + ふっくら白ひげ --- */
+.player.char-king .body{ width:74%;height:80%; }
+.player.char-king .head{
+  background:linear-gradient(180deg,#ffe6c8 0%,#efb984 100%);
+  border-radius:48% 48% 45% 45%;
+  width:100%;height:82%;top:8%;left:0;transform:none;
+  z-index:2;
+}
+.player.char-king .hat{
+  background:linear-gradient(180deg,#ffe86a 0%,#ffc92e 62%,#d58c12 100%);
+  top:-22%;height:38%;border-radius:0;left:-8%;width:116%;
+  clip-path:polygon(0% 100%,0% 40%,17% 68%,33% 14%,50% 58%,67% 14%,83% 68%,100% 40%,100% 100%);
+  border:none;z-index:4;
+  filter:drop-shadow(0 2px 0 #1a1a1a);
+}
+.player.char-king .gem{
+  width:14%;height:14%;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#ff5460 35%,#b91528 100%);
+  top:3%;left:43%;border:2px solid #1a1a1a;box-sizing:border-box;z-index:5;
+}
+.player.char-king .beard{
+  width:72%;height:38%;background:linear-gradient(180deg,#fff,#e9edf2);
+  border-radius:18% 18% 54% 54%;bottom:-8%;left:14%;
+  border:2.5px solid #1a1a1a;box-sizing:border-box;border-top:none;z-index:1;
+}
+.player.char-king .beard::before,.player.char-king .beard::after{
+  content:'';position:absolute;top:-12%;width:38%;height:36%;
+  background:#fff;border:2px solid #1a1a1a;border-radius:50%;box-sizing:border-box;
+}
+.player.char-king .beard::before{ left:-8%; }
+.player.char-king .beard::after{ right:-8%; }
+.player.char-king .torso{
+  display:none;
+}
+.player.char-king .cape{
+  width:114%;height:42%;background:linear-gradient(180deg,#d33232,#7f1420);
+  border-radius:50% 50% 22% 22%;bottom:0;left:-7%;
+  border:2.5px solid #1a1a1a;box-sizing:border-box;z-index:-2;
+}
+
+/* ゴール到達時、盤面が一瞬きらめく */
+#board.cleared{ animation:boardClear .5s ease; }
+@keyframes boardClear{ 0%{filter:brightness(1);} 35%{filter:brightness(1.4);} 100%{filter:brightness(1);} }
+#controls{
+  width:100%;max-width:520px;
+  display:flex;flex-direction:column;align-items:center;
+  padding:4px 14px 10px;gap:8px;
+  flex:0 0 auto;
+}
+.btnRow{display:flex;flex-direction:row;gap:10px;justify-content:center;width:100%;max-width:340px;margin-top:18px;}
+.btnRow button{
+  flex:1 1 0;position:relative;
+  display:flex;align-items:center;justify-content:center;
+  height:46px;padding:0;border-radius:12px;
+  font-size:22px;
+}
+.btnRow button .bIcon{ line-height:1; }
+.btnRow button:disabled{ opacity:.35; }
+.bBadge{
+  position:absolute;top:-8px;right:-8px;
+  background:#ff4d2e;color:#fff;
+  font-size:13px;font-weight:900;min-width:22px;height:22px;
+  border-radius:11px;display:flex;align-items:center;justify-content:center;padding:0 5px;
+  border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);
+  font-family:'Arial Black',sans-serif;
+}
+#breakBtn.armed{ background:linear-gradient(135deg,#ff7a3a,#e0452a); border-color:#ff7a3a; }
+.btnRow button.flash{ animation:breakFlash .5s ease; }
+@keyframes breakFlash{ 0%,100%{opacity:1;} 25%,75%{opacity:.3;} 50%{opacity:1;transform:scale(1.12);} }
+#soundBtn.muted{ opacity:.45; }
+button{
+  font-family:inherit;color:var(--ink);
+  background:var(--panel);
+  border:2px solid var(--panelBorder);border-radius:10px;
+  padding:7px 12px;font-size:13px;letter-spacing:1px;cursor:pointer;
+}
+button:active{transform:translateY(2px);}
+#dpad{
+  display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);
+  gap:5px;margin:0 auto;
+}
+#dpad button{
+  font-size:20px;padding:0;border-radius:12px;
+  background:var(--panel);border:2px solid var(--panelBorder);
+}
+#dpad .blank{visibility:hidden;}
+#hint{display:none;}
+#overlay{
+  position:fixed;inset:0;background:rgba(10,6,3,.82);
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;
+  z-index:10;text-align:center;padding:20px;
+}
+#overlay.show{display:flex;}
+#overlay h2{
+  font-size:34px;font-weight:normal;letter-spacing:6px;color:var(--rune);
+  text-shadow:0 0 18px rgba(86,224,195,.7);
+}
+#overlay p{color:#cdb592;font-size:14px;line-height:1.8;}
+.statRow{
+  display:flex;gap:10px;justify-content:center;margin-top:16px;
+}
+.stat{
+  background:var(--cave2);border:2px solid #4a3729;border-radius:10px;
+  padding:8px 14px;min-width:72px;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+}
+.stat .statLabel{font-size:11px;color:#8d7458;letter-spacing:1px;}
+.stat .statVal{font-size:22px;color:var(--ink);}
+.stat.statPar{border-color:var(--accent);}
+.stat.statPar .statVal{color:var(--accent);}
+#overlay .row{display:flex;gap:10px;}
+#overlay button{font-size:16px;padding:12px 20px;border-color:var(--accent);}
+@media (max-height:760px){
+  #dpad{grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px);gap:4px;}
+  h1{font-size:18px;}
+  #controls{padding:2px 14px 6px;gap:6px;}
+  .btnRow button{height:42px;font-size:20px;}
+  .btnRow{margin-top:12px;}
+}
+</style>
+</head>
+<body>
+<header>
+  <div id="hdrLeft">
+    <h1 id="gameTitle">イワオシ</h1>
+    <span id="stageName"></span>
+    <div id="stageNav">
+      <button id="prevStage" aria-label="前のステージ">◀</button>
+      <button id="stagePick"><span id="stagePickNum">1</span> / 31</button>
+      <button id="nextStage" aria-label="次のステージ">▶</button>
+    </div>
+  </div>
+  <div id="hdrBtns">
+    <button id="helpBtn" aria-label="あそびかた">❓</button>
+    <button id="charBtn2" aria-label="キャラ">🧍</button>
+    <button id="soundBtn" aria-label="おんがく">🎵</button>
+    <button id="themeBtn" aria-label="テーマ">🎨</button>
+    <button id="langBtn">EN</button>
+  </div>
+</header>
+<div id="topbar">
+  <div id="hud">
+    <span id="steps">0 歩</span>
+    <span id="bestRec"></span>
+  </div>
+</div>
+<div id="boardWrap"><div id="board"></div></div>
+<div id="controls">
+  <div id="dpad">
+    <span class="blank"></span><button data-d="0,-1">▲</button><span class="blank"></span>
+    <button data-d="-1,0">◀</button><span class="blank"></span><button data-d="1,0">▶</button>
+    <span class="blank"></span><button data-d="0,1">▼</button><span class="blank"></span>
+  </div>
+  <div class="btnRow">
+    <button id="resetBtn" aria-label="やりなおす"><span class="bIcon">↺</span></button>
+    <button id="breakBtn" aria-label="岩を壊す" style="display:none;"><span class="bIcon">💥</span><span id="breakCount" class="bBadge">0</span></button>
+  </div>
+</div>
+<div id="tutorial">
+  <div id="tutCard">
+    <div id="tutIcon">🪨</div>
+    <p id="tutText"></p>
+    <div id="tutBtns">
+      <button id="tutSkip">スキップ</button>
+      <button id="tutNext">つぎへ</button>
+    </div>
+    <div id="tutDots"></div>
+  </div>
+</div>
+<div id="overlay">
+  <h2 id="ovTitle">クリア!</h2>
+  <p id="ovText"></p>
+  <div class="row">
+    <button id="ovRetry">もういちど</button>
+    <button id="ovNext">つぎへ ▶</button>
+  </div>
+</div>
+
+<div id="picker">
+  <div id="pickerBox">
+    <h3><span id="pickerTitle">ステージをえらぶ</span> <button id="pickerClose">とじる</button></h3>
+    <button id="endlessStart" class="endlessStartBtn">∞ エンドレスモード</button>
+    <button id="editorStart" class="editorStartBtn">✏️ コースを作る</button>
+    <button id="myCoursesStart" class="editorStartBtn">📁 マイコース</button>
+    <div id="pickGrid"></div>
+  </div>
+</div>
+
+<div id="myCourses">
+  <div id="myCoursesBox">
+    <h3><span id="myCoursesTitle">マイコース</span> <button id="myCoursesClose">とじる</button></h3>
+    <div id="myCoursesList"></div>
+  </div>
+</div>
+
+<div id="themePicker">
+  <div id="themeBox">
+    <h3><span id="themeTitle">テーマをえらぶ</span> <button id="themeClose">とじる</button></h3>
+    <div id="themeGrid"></div>
+  </div>
+</div>
+
+<div id="charPicker">
+  <div id="charBox">
+    <h3><span id="charTitle">キャラをえらぶ</span> <button id="charClose">とじる</button></h3>
+    <div id="charGrid"></div>
+  </div>
+</div>
+
+<div id="helpPicker">
+  <div id="helpBox">
+    <h3><span id="helpTitle">あそびかた</span> <button id="helpClose">とじる</button></h3>
+    <div id="helpContent"></div>
+  </div>
+</div>
+
+<div id="editor">
+  <div id="editorBar">
+    <span id="editorTitle">コースエディタ</span>
+    <button id="editorExit">✕ とじる</button>
+  </div>
+  <div id="editorPalette">
+    <button class="palBtn sel" data-tool="P">🧍 スタート</button>
+    <button class="palBtn" data-tool="G">🚩 ゴール</button>
+    <button class="palBtn" data-tool="#">🧱 壁</button>
+    <button class="palBtn" data-tool="B">🪨 岩</button>
+    <button class="palBtn" data-tool="O">🕳 穴</button>
+    <button class="palBtn" data-tool=".">⬜ 床(消す)</button>
+  </div>
+  <div id="editorOpts">
+    <label class="optSel"><span id="edWLabel">幅</span><select id="edWSel"></select></label>
+    <label class="optSel"><span id="edHLabel">高さ</span><select id="edHSel"></select></label>
+    <label class="optSel"><span id="edBreakLabel2">💥壊し</span><select id="edBreakSel"></select></label>
+    <label class="optSel"><span id="edSlideLabel">❄️氷</span><select id="edSlideSel"><option value="0">OFF</option><option value="1">ON</option></select></label>
+  </div>
+  <div id="editorBoardWrap"><div id="editorBoard"></div></div>
+  <div id="editorMsg"></div>
+  <div id="edSaveRow" style="display:none;">
+    <input id="edNameInput" type="text" maxlength="24" placeholder="コース名">
+    <button id="edSaveConfirm">保存</button>
+    <button id="edSaveCancel">やめる</button>
+  </div>
+  <div id="editorActions">
+    <button id="edCheck">🔍 解けるかチェック</button>
+    <button id="edSave" disabled>💾 保存</button>
+    <button id="edShare" disabled>🔗 共有リンクを作る</button>
+    <button id="edTest" disabled>▶ ためし遊び</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+const LEVELS = [
+  { name:'1. めざめの間', nameEn:'1. Awakening Chamber', par:8, map:[
+    '#######',
+    '#P....#',
+    '#.....#',
+    '###B###',
+    '#.....#',
+    '#....G#',
+    '#######',
+  ]},
+  { name:'2. ひとつ穴の回廊', nameEn:'2. Single-Pit Corridor', par:7, map:[
+    '#######',
+    '#P....#',
+    '#.#.#.#',
+    '#.#B#.#',
+    '#.#O#.#',
+    '#.#.#.#',
+    '###G###',
+    '#######',
+  ]},
+  { name:'3. 迷いの十字路', nameEn:'3. Crossroads of Doubt', par:9, map:[
+    '########',
+    '#P.....#',
+    '#.##.#.#',
+    '#...B..#',
+    '#.##.###',
+    '#..#..G#',
+    '########',
+  ]},
+  { name:'4. ふたつの巨石', nameEn:'4. Two Boulders', par:10, map:[
+    '#########',
+    '#P..#...#',
+    '#.B.#.G.#',
+    '#...#...#',
+    '#.B.O...#',
+    '#...#...#',
+    '#########',
+  ]},
+  { name:'5. 二重の封印', nameEn:'5. Double Seal', par:10, map:[
+    '#########',
+    '#P......#',
+    '#.##.##.#',
+    '#.#.B.#.#',
+    '#.#.O.#.#',
+    '#.#...#.#',
+    '#.##B##.#',
+    '#...O...#',
+    '####G####',
+    '#########',
+  ]},
+  { name:'6. 岩場のわかれ道', nameEn:'6. Forked Rocks', par:27, map:[
+    '##########',
+    '#.BO.....#',
+    '#OB.##B..#',
+    '#...##.O.#',
+    '#..B##..O#',
+    '#B.P##G..#',
+    '#..O..OB.#',
+    '##########',
+  ]},
+  { name:'7. 偽りの分岐', nameEn:'7. False Fork', par:26, map:[
+    '#######',
+    '#GOOO##',
+    '#B..B.#',
+    '#PB.B.#',
+    '#.O..O#',
+    '#######',
+  ]},
+  { name:'8. 惑わしの前庭', nameEn:'8. Deceptive Forecourt', par:24, map:[
+    '########',
+    '#O.#O..#',
+    '#B..BBP#',
+    '#BO.O..#',
+    '#.G#..##',
+    '########',
+  ]},
+  { name:'9. 詰みの回廊', nameEn:'9. Deadlock Hall', par:27, map:[
+    '########',
+    '#.O....#',
+    '#.OB.BP#',
+    '#.OB.O.#',
+    '#BO.#.##',
+    '#.GB...#',
+    '########',
+  ]},
+  { name:'10. 小さな奈落', nameEn:'10. Little Abyss', par:35, map:[
+    '##########',
+    '#....P..O#',
+    '#..O.B...#',
+    '#.#......#',
+    '#BO...B..#',
+    '#.#.O.OBB#',
+    '#GOO..O..#',
+    '##########',
+  ]},
+  { name:'11. 砂の中庭', nameEn:'11. Sand Courtyard', par:41, map:[
+    '##########',
+    '#OG.O.#..#',
+    '##.#...O.#',
+    '#.O.#.B.##',
+    '#BO.#..B.#',
+    '#.......B#',
+    '#.P...B..#',
+    '##########',
+  ]},
+  { name:'12. 落とし穴の回廊', nameEn:'12. Pitfall Corridor', par:57, map:[
+    '##########',
+    '#.....O..#',
+    '#BB......#',
+    '#O..O..O.#',
+    '#OOBO.P.B#',
+    '#.....#O.#',
+    '#...#B.G.#',
+    '##########',
+  ]},
+  { name:'13. 迷い岩の谷', nameEn:'13. Valley of Lost Rocks', par:45, map:[
+    '##########',
+    '#G#O..B..#',
+    '#.#....BO#',
+    '#.O.#..B##',
+    '#B...P...#',
+    '#..#.B..O#',
+    '#..O..#..#',
+    '##########',
+  ]},
+  { name:'14. 思索の巨石', nameEn:'14. Boulders of Thought', par:28, map:[
+    '########',
+    '#.B.GO.#',
+    '#OB#BO.#',
+    '#.O..BP#',
+    '#...B.O#',
+    '#....#.#',
+    '########',
+  ]},
+  { name:'15. 最果ての祭壇', nameEn:'15. Farthest Altar', par:73, map:[
+    '##########',
+    '#........#',
+    '#.B.#..###',
+    '##...#.###',
+    '#...B..P.#',
+    '##O...#..#',
+    '#.#B....B#',
+    '#..#.#OO.#',
+    '#....#G#B#',
+    '##########',
+  ]},
+  { name:'16. ねじれた地下道', nameEn:'16. Twisted Tunnel', par:40, map:[
+    '#########',
+    '#...B...#',
+    '#.BB..O.#',
+    '#....#P.#',
+    '#.B.#G###',
+    '#B.OOO.##',
+    '#########',
+  ]},
+  { name:'17. 奈落の原', nameEn:'17. Abyssal Field', par:58, map:[
+    '#########',
+    '#..O....#',
+    '#O.O.B..#',
+    '#BBB..OO#',
+    '#....O..#',
+    '#P.O.O.O#',
+    '#....OOO#',
+    '#....BBG#',
+    '#########',
+  ]},
+  { name:'18. 生ける巨石', nameEn:'18. Living Megalith', par:100, map:[
+    '##########',
+    '#.G.OO.###',
+    '#B..#O..##',
+    '#.##...B##',
+    '##O.B#...#',
+    '#.B.PB...#',
+    '#...###..#',
+    '##########',
+  ]},
+  { name:'19. 試練の大広間', nameEn:'19. Hall of Trials', par:62, map:[
+    '##########',
+    '#..#B.B.G#',
+    '##.P#.##.#',
+    '#..#....O#',
+    '#.BO.....#',
+    '#..O.#..##',
+    '#..#.B...#',
+    '#.#.B.##.#',
+    '#.#....#.#',
+    '##########',
+  ]},
+  { name:'20. 幻惑の深淵', nameEn:'20. Beguiling Deep', par:91, map:[
+    '##########',
+    '#OO..O.B.#',
+    '#O..OO...#',
+    '#OOO.B.BO#',
+    '#O.O....O#',
+    '#O.O.OOBO#',
+    '#GOOPBOOO#',
+    '##########',
+  ]},
+  { name:'21. 巨石神の間', nameEn:'21. Hall of the Megalith God', par:112, map:[
+    '##########',
+    '#P.#B.BGO#',
+    '##..#.##O#',
+    '#..#...O.#',
+    '#.BO.....#',
+    '#..B.#.###',
+    '#.##.B...#',
+    '#.#.B.##.#',
+    '#.#....#.#',
+    '##########',
+  ]},
+  { name:'22. 眠れる守護者', nameEn:'22. Sleeping Guardian', par:51, map:[
+    '#########',
+    '#BOOOOO.#',
+    '#GO#OBB.#',
+    '#OOOB.#O#',
+    '#OB..BB.#',
+    '##.B.PBO#',
+    '#########',
+  ]},
+  { name:'23. 虚無の祭場', nameEn:'23. Altar of the Void', par:95, map:[
+    '#########',
+    '#..O.OOG#',
+    '#O.OB.OB#',
+    '#.B.BOOO#',
+    '#..O#OB.#',
+    '#BO.POB.#',
+    '#O..B..O#',
+    '#########',
+  ]},
+  { name:'24. 底なしの庭', nameEn:'24. Bottomless Garden', par:92, map:[
+    '#########',
+    '#O.B...G#',
+    '#..OO.OO#',
+    '#.O.B.B.#',
+    '#O..#BOO#',
+    '#BOOO...#',
+    '#OP...B.#',
+    '#########',
+  ]},
+  { name:'25. 奈落のほとり', nameEn:'25. Edge of the Abyss', par:81, map:[
+    '#########',
+    '#.BOO.#O#',
+    '#OB..O#B#',
+    '#B.OB#BO#',
+    '#.B.BOO.#',
+    '##...OOO#',
+    '#O.BPOBG#',
+    '#########',
+  ]},
+  { name:'26. 神話の深淵', nameEn:'26. Mythic Abyss', par:146, map:[
+    '##########',
+    '#P..BOBGO#',
+    '##.O..##O#',
+    '#..#.OO..#',
+    '#.BOB.B..#',
+    '##BB.#.###',
+    '#..#.B.###',
+    '###...##B#',
+    '###...##.#',
+    '##########',
+  ]},
+  { name:'27. 岩神の庭', nameEn:'27. Garden of the Stone God', par:86, map:[
+    '##########',
+    '#OOBO...O#',
+    '#.B.O.OB.#',
+    '#....BOBB#',
+    '#POO....B#',
+    '#B.OOBOBO#',
+    '#.BGB.B.O#',
+    '##########',
+  ]},
+  { name:'28. 奈落の回廊', nameEn:'28. Abyss Corridor', par:106, map:[
+    '##########',
+    '#........#',
+    '#.B.#.####',
+    '##O..#.###',
+    '#..BB.B..#',
+    '##O.O.#..#',
+    '#.#BB..OB#',
+    '#P.#.#OO.#',
+    '#....#G#B#',
+    '##########',
+  ]},
+  { name:'29. 狂気の石室', nameEn:'29. Chamber of Madness', par:140, map:[
+    '##########',
+    '#P.#B.BGO#',
+    '##.O..##O#',
+    '#..#.OO..#',
+    '#.BOB....#',
+    '##.BB#.###',
+    '#O.#.B.###',
+    '#.#...##B#',
+    '###...B#.#',
+    '##########',
+  ]},
+  { name:'30. 深淵への階段', nameEn:'30. Stairs to the Deep', par:115, map:[
+    '##########',
+    '#..B..OOO#',
+    '#.B.O..B.#',
+    '#....BOBB#',
+    '#BOOP.O.B#',
+    '#..OOO.B.#',
+    '#.BGB...B#',
+    '##########',
+  ]},
+  { name:'31. 終焉の原', nameEn:'31. Field of the End', par:116, map:[
+    '##########',
+    '#O.B..OOO#',
+    '#...O.OB.#',
+    '#.B..BOBB#',
+    '#POO....B#',
+    '#B.OOO.B.#',
+    '#OBGBB..B#',
+    '##########',
+  ]},
+  { name:'32. はじめての破壊', nameEn:'32. First Break', par:2, breaks:1, map:[
+    '#####',
+    '#PBG#',
+    '#####',
+  ]},
+  { name:'33. 二連の壁岩', nameEn:'33. Twin Block', par:3, breaks:2, map:[
+    '######',
+    '#PBBG#',
+    '######',
+  ]},
+  { name:'34. 岩窟の試練', nameEn:'34. Cavern Trial', par:8, breaks:2, map:[
+    '#######',
+    '#BBO..#',
+    '#B.O.##',
+    '#P#..O#',
+    '#B##G.#',
+    '#######',
+  ]},
+  { name:'35. 崩れる小道', nameEn:'35. Crumbling Path', par:6, breaks:1, map:[
+    '######',
+    '#.P###',
+    '#BBOB#',
+    '#.O#G#',
+    '######',
+  ]},
+  { name:'36. 歯車仕掛け', nameEn:'36. Clockwork', par:12, breaks:2, map:[
+    '#######',
+    '#P#O#G#',
+    '#B..OB#',
+    '#.B#BO#',
+    '#...#.#',
+    '#######',
+  ]},
+  { name:'37. 封印の三岩', nameEn:'37. Triple Seal', par:29, breaks:3, map:[
+    '########',
+    '#....#.#',
+    '#..#BO##',
+    '#.O..PO#',
+    '#B..#OB#',
+    '#B.#GB.#',
+    '########',
+  ]},
+  { name:'38. 爆裂の迷宮', nameEn:'38. Blast Labyrinth', par:20, breaks:3, map:[
+    '########',
+    '#.POBBG#',
+    '#B.O#.O#',
+    '#.BB.#.#',
+    '##.O...#',
+    '#O...###',
+    '########',
+  ]},
+  { name:'39. 封じられた間', nameEn:'39. Sealed Chamber', par:17, breaks:2, map:[
+    '########',
+    '#.##OOG#',
+    '#..#PO##',
+    '##.B.B.#',
+    '#O..BBB#',
+    '########',
+  ]},
+  { name:'40. 崩壊する聖域', nameEn:'40. Crumbling Sanctum', par:35, breaks:3, map:[
+    '########',
+    '#POB#BB#',
+    '#..B..O#',
+    '#.#O...#',
+    '#.##B.O#',
+    '#.B..#G#',
+    '########',
+  ]},
+  { name:'41. 終焉の巨石', nameEn:'41. The Final Megalith', par:53, map:[
+    '#########',
+    '#GO.P.B.#',
+    '#O#.O#.##',
+    '#.....B.#',
+    '###.O.B.#',
+    '##.OO.B.#',
+    '#..O#B..#',
+    '#########',
+  ]},
+  { name:'42. 朽ちた回廊', nameEn:'42. Decayed Corridor', par:42, map:[
+    '##########',
+    '#OO..#O.G#',
+    '#.BPB#.B.#',
+    '#OBBOOOB.#',
+    '###.##B#B#',
+    '#O..B.#B.#',
+    '#.BOB...O#',
+    '##########',
+  ]},
+  { name:'43. 二択の呪い', nameEn:'43. Cursed Choice', par:67, map:[
+    '##########',
+    '#.....BO.#',
+    '#.B#B.#..#',
+    '#OBOPOOOB#',
+    '#.#B.#BOG#',
+    '#B....OOO#',
+    '#..#..#BO#',
+    '##########',
+  ]},
+  { name:'44. 三叉の惑い', nameEn:'44. Triple Doubt', par:39, map:[
+    '#########',
+    '#G#.....#',
+    '#OO.B#.B#',
+    '##P.B...#',
+    '#.#.B#OB#',
+    '#O....#.#',
+    '#########',
+  ]},
+  { name:'45. 深淵の囁き', nameEn:'45. Abyssal Whisper', par:23, map:[
+    '########',
+    '#O....O#',
+    '#B#.#O.#',
+    '#.PB.B.#',
+    '#B..OOO#',
+    '#..BBG.#',
+    '########',
+  ]},
+  { name:'46. 剣山の岩庭', nameEn:'46. Needle Rock Garden', par:49, map:[
+    '##########',
+    '#.P...OO.#',
+    '#..XBBX.G#',
+    '#.#BOB.#.#',
+    '#.BOXXB.O#',
+    '#.BX..X.O#',
+    '#..B.OB.O#',
+    '##########',
+  ]},
+  { name:'47. 乱刃の間', nameEn:'47. Scattered Blades', par:32, map:[
+    '#########',
+    '#O.B.BXB#',
+    '#OBB.OBX#',
+    '#P...OB##',
+    '#B.BXBB.#',
+    '#OBX.OOG#',
+    '#########',
+  ]},
+  { name:'48. 崩落の予感', nameEn:'48. Omen of Collapse', par:44, map:[
+    '#########',
+    '#.BO..#.#',
+    '#OB.B.B.#',
+    '###B..OO#',
+    '#PO...#G#',
+    '#...B.O##',
+    '#########',
+  ]},
+  { name:'49. 影の分岐', nameEn:'49. Shadow Fork', par:42, map:[
+    '#########',
+    '###O#...#',
+    '##OB.BBO#',
+    '#O......#',
+    '#OO.OOOB#',
+    '#GBPB..O#',
+    '#########',
+  ]},
+  { name:'50. 取捨の刃', nameEn:'50. Spend or Fill', par:39, map:[
+    '#########',
+    '#....##X#',
+    '#.OO.B.O#',
+    '#P..BBB.#',
+    '#BOBX.B.#',
+    '#...GX.B#',
+    '#########',
+  ]},
+  { name:'51. 円環の試練', nameEn:'51. Ring Trial', par:32, map:[
+    '########',
+    '#.BO...#',
+    '#GOO...#',
+    '#OP.#B.#',
+    '#OB....#',
+    '#OBOB#B#',
+    '#BBO..O#',
+    '########',
+  ]},
+  { name:'52. 偽りの扉', nameEn:'52. The False Door', par:72, map:[
+    '#########',
+    '##..BXB.#',
+    '#P.BBBBB#',
+    '#X..B..O#',
+    '#BB###OO#',
+    '#O.OGO..#',
+    '#XO###O.#',
+    '#########',
+  ]},
+  { name:'53. 静寂の罠', nameEn:'53. Silent Trap', par:47, map:[
+    '#########',
+    '#...B..O#',
+    '#BO.BOBO#',
+    '#OB.....#',
+    '#BO..#BP#',
+    '#GOOO.OO#',
+    '#########',
+  ]},
+  { name:'54. 思考の檻', nameEn:'54. Cage of Thought', par:42, map:[
+    '########',
+    '#OB..OO#',
+    '#BB..BB#',
+    '#OOO...#',
+    '#OBOOO.#',
+    '#B#O.P.#',
+    '#.G.BB.#',
+    '########',
+  ]},
+  { name:'55. 偽りの抜け道', nameEn:'55. False Passage', par:60, map:[
+    '#########',
+    '##OO..O##',
+    '#..B.BO.#',
+    '#OOB..B.#',
+    '#O#O#...#',
+    '#O##B.O##',
+    '#G..B..P#',
+    '#########',
+  ]},
+  { name:'56. 六道の迷い', nameEn:'56. Six Ways', par:51, map:[
+    '########',
+    '#O.O..O#',
+    '#.OBB.B#',
+    '#.BP.OO#',
+    '#.B#.OO#',
+    '#B.#B#.#',
+    '#..#.G.#',
+    '########',
+  ]},
+  { name:'57. 蟻地獄', nameEn:'57. Antlion Nest', par:47, map:[
+    '########',
+    '#OOB.BO#',
+    '#BBOOB.#',
+    '#.OB#BB#',
+    '#OOG#..#',
+    '#OO.O.O#',
+    '#...#.P#',
+    '########',
+  ]},
+  { name:'58. 五岐の試練', nameEn:'58. Five Paths', par:63, map:[
+    '#########',
+    '##B#P.#G#',
+    '#O#.B.OO#',
+    '#O.#..OO#',
+    '#....#O.#',
+    '#BBBB.B.#',
+    '#BOBO.B.#',
+    '#########',
+  ]},
+  { name:'59. 罠師の間', nameEn:'59. Trapper Hall', par:50, map:[
+    '########',
+    '#O#B.BO#',
+    '###OOB##',
+    '#OBOBO.#',
+    '#.OB.B.#',
+    '#BO..BO#',
+    '#GO#.PB#',
+    '########',
+  ]},
+  { name:'60. 導火の迷宮', nameEn:'60. Fuse Labyrinth', par:52, breaks:3, map:[
+    '##########',
+    '#OB..O.OG#',
+    '##B...BB##',
+    '#......#.#',
+    '#B##....O#',
+    '#.BO#OP.##',
+    '##.BBO...#',
+    '##########',
+  ]},
+  { name:'61. 爆心の迷路', nameEn:'61. Blast Maze', par:33, breaks:2, map:[
+    '#######',
+    '#BOOG##',
+    '#B.O#B#',
+    '#O...P#',
+    '#OBB#.#',
+    '##..B.#',
+    '#######',
+  ]},
+  { name:'62. 砕岩の広間', nameEn:'62. Rockbreak Hall', par:66, breaks:2, map:[
+    '#########',
+    '#O#..OOG#',
+    '#.#.OO###',
+    '#OBB..O##',
+    '##..P...#',
+    '#.B.#.BB#',
+    '#B...B#.#',
+    '#########',
+  ]},
+  { name:'63. 深穴の石庭', nameEn:'63. Deep-Pit Stone Garden', par:54, map:[
+    '#########',
+    '#GB...OB#',
+    '#O#BP...#',
+    '#OO...B.#',
+    '#O.....B#',
+    '#...#.O##',
+    '#.OB..#.#',
+    '#B..B.O.#',
+    '#########',
+  ]},
+  { name:'64. 爆裂の広間', nameEn:'64. Explosive Hall', par:47, breaks:3, map:[
+    '##########',
+    '#BBB#BOOG#',
+    '##.B.O#.O#',
+    '#OB.##.OO#',
+    '#.B..O.OP#',
+    '#.BOBB.B.#',
+    '#B.####.B#',
+    '##########',
+  ]},
+  { name:'65. 連穴の岩庭', nameEn:'65. Row of Pits', par:77, map:[
+    '#########',
+    '#.B.B.BG#',
+    '#P...OOO#',
+    '#O.O.O.##',
+    '#OBBBB.O#',
+    '#O..OO..#',
+    '#########',
+  ]},
+  { name:'66. 大穴の迷宮', nameEn:'66. Labyrinth of Pits', par:98, map:[
+    '##########',
+    '#O..B#..G#',
+    '#OBOOOO#B#',
+    '#B......P#',
+    '##..####B#',
+    '#.B.B.B.O#',
+    '#...#OB.##',
+    '##########',
+  ]},
+  { name:'67. 四刃の獄', nameEn:'67. Prison of Four Blades', par:109, map:[
+    '#########',
+    '#..XBX#O#',
+    '#B.PBXXB#',
+    '#OO.B.O##',
+    '#O#B#BB.#',
+    '#O#OB.BB#',
+    '#OGB#OBO#',
+    '#########',
+  ]},
+  { name:'68. 氷結の間', nameEn:'68. Frozen Hall', par:10, slide:true, map:[
+    '#######',
+    '#..O..#',
+    '#GO...#',
+    '#B..B.#',
+    '##O#..#',
+    '#..BP##',
+    '#######',
+  ]},
+  { name:'69. 凍てつく回廊', nameEn:'69. Frosted Corridor', par:11, slide:true, map:[
+    '#########',
+    '#B..P..##',
+    '#.....#.#',
+    '#...B#.O#',
+    '#.B..OG.#',
+    '#.O..#..#',
+    '#########',
+  ]},
+  { name:'70. 氷上の罠', nameEn:'70. Ice Trap', par:11, slide:true, map:[
+    '########',
+    '#.....##',
+    '#..B..##',
+    '#....OG#',
+    '#.O..###',
+    '#P...B.#',
+    '########',
+  ]},
+  { name:'71. 極北の谷', nameEn:'71. Far North Valley', par:29, slide:true, map:[
+    '#########',
+    '#BO....B#',
+    '#....B..#',
+    '#O.....B#',
+    '#GO..O..#',
+    '##......#',
+    '#OP...#.#',
+    '#########',
+  ]},
+  { name:'72. 無限滑走', nameEn:'72. Endless Glide', par:27, slide:true, map:[
+    '#########',
+    '#BGB.B..#',
+    '#..O...B#',
+    '#.#OB.#.#',
+    '#OO.PO..#',
+    '#.......#',
+    '#########',
+  ]},
+  { name:'73. 氷晶の間', nameEn:'73. Crystal Chamber', par:27, slide:true, map:[
+    '#########',
+    '#P.....O#',
+    '#BO.....#',
+    '#..B....#',
+    '#...O...#',
+    '#B#..OO.#',
+    '#GO.B..##',
+    '#########',
+  ]},
+  { name:'74. 流氷の路', nameEn:'74. Drift Ice Path', par:26, slide:true, map:[
+    '#########',
+    '#...PO..#',
+    '#B..B.B.#',
+    '#.#....B#',
+    '#.O.....#',
+    '#.G#OO..#',
+    '#########',
+  ]},
+  { name:'75. 滑走の迷宮', nameEn:'75. Gliding Labyrinth', par:24, slide:true, map:[
+    '#########',
+    '#.#OO.OG#',
+    '#......##',
+    '#B.B....#',
+    '##..B...#',
+    '#P......#',
+    '#...BB..#',
+    '#########',
+  ]},
+  { name:'76. 凍結回路', nameEn:'76. Frozen Circuit', par:26, slide:true, map:[
+    '#########',
+    '##...PBG#',
+    '#......O#',
+    '#....B.O#',
+    '#.#O...O#',
+    '#.O.B...#',
+    '#..B....#',
+    '#########',
+  ]},
+  { name:'77. 滑る巨石', nameEn:'77. Sliding Stone', par:22, slide:true, map:[
+    '########',
+    '#.BOBP.#',
+    '#OB..BB#',
+    '#B.OOO.#',
+    '#..OG#.#',
+    '########',
+  ]},
+  { name:'78. 凍れる試練', nameEn:'78. Frozen Trial', par:21, slide:true, map:[
+    '########',
+    '#......#',
+    '#B...OO#',
+    '#.B.#G.#',
+    '#P..B#.#',
+    '#OBOO..#',
+    '########',
+  ]},
+  { name:'79. 凍土の迷い', nameEn:'79. Tundra Maze', par:26, slide:true, map:[
+    '########',
+    '#GB....#',
+    '#O..P#.#',
+    '#OOBB..#',
+    '#......#',
+    '#..B.BO#',
+    '########',
+  ]},
+  { name:'80. 氷壁の謎', nameEn:'80. Ice Wall Riddle', par:50, slide:true, map:[
+    '##########',
+    '#OB.#O.B.#',
+    '#BB.#.B.O#',
+    '#..OB.####',
+    '####...O.#',
+    '#...O#.B.#',
+    '#BG.O#PBO#',
+    '##########',
+  ]},
+  { name:'81. 滑氷の罠', nameEn:'81. Slip Trap', par:23, slide:true, map:[
+    '########',
+    '#B...BO#',
+    '#P.O..B#',
+    '#.O....#',
+    '#.BOB..#',
+    '#...#.##',
+    '##...OG#',
+    '########',
+  ]},
+  { name:'82. 氷の回廊', nameEn:'82. Ice Gallery', par:35, slide:true, map:[
+    '#########',
+    '#.B.B..O#',
+    '#OB.PBBO#',
+    '#..OOBOB#',
+    '#B#..OOG#',
+    '#.#O...##',
+    '#OB...#O#',
+    '#########',
+  ]},
+  { name:'83. 氷神の試練', nameEn:'83. Trial of Ice God', par:39, slide:true, map:[
+    '#########',
+    '#OBO#O.G#',
+    '#.B.#O.O#',
+    '###...###',
+    '#....B.O#',
+    '#BB.#.BB#',
+    '#P..#O.O#',
+    '#########',
+  ]},
+  { name:'84. 滑走連鎖', nameEn:'84. Glide Chain', par:28, slide:true, map:[
+    '########',
+    '#.....##',
+    '#...BB.#',
+    '#......#',
+    '#B...OB#',
+    '#GO..P.#',
+    '#..OO#.#',
+    '########',
+  ]},
+  { name:'85. 絶氷の聖域', nameEn:'85. Absolute Zero', par:58, slide:true, map:[
+    '##########',
+    '#OBOOB..P#',
+    '#O##B.##.#',
+    '#OO..#OB.#',
+    '#.#....#B#',
+    '#.BB##.BO#',
+    '#G#OBO..O#',
+    '##########',
+  ]},
+  { name:'86. 凍結地獄', nameEn:'86. Freezing Inferno', par:35, slide:true, map:[
+    '########',
+    '#O...BG#',
+    '#O...#O#',
+    '#......#',
+    '#B#O...#',
+    '#.BOB..#',
+    '#....BP#',
+    '########',
+  ]},
+  { name:'87. 極寒の試練', nameEn:'87. Frigid Trial', par:60, slide:true, map:[
+    '##########',
+    '#O...##.B#',
+    '#B##B.BOO#',
+    '#..#.##B##',
+    '#OBOBP...#',
+    '##.##B#BB#',
+    '#GOOOO.O.#',
+    '##########',
+  ]},
+  { name:'88. 滑走の試練', nameEn:'88. Glide Trial', par:25, slide:true, map:[
+    '#########',
+    '##....O.#',
+    '#...#OBB#',
+    '#OBB#.P.#',
+    '#OOO.B.O#',
+    '#GO.O...#',
+    '#########',
+  ]},
+  { name:'89. 凍てつく終焉', nameEn:'89. Frozen End', par:34, slide:true, map:[
+    '#########',
+    '#GO.O...#',
+    '#.#...B.#',
+    '#B.OOPB.#',
+    '#.B.....#',
+    '#.O.B..##',
+    '#########',
+  ]},
+  { name:'90. 滑走の極致', nameEn:'90. Glide Apex', par:36, slide:true, map:[
+    '#########',
+    '#BGO.O..#',
+    '#.#O#...#',
+    '#.....B.#',
+    '#B....BB#',
+    '#...O.P.#',
+    '#..O....#',
+    '#########',
+  ]},
+  { name:'91. 氷獄の門', nameEn:'91. Gate of Ice Hell', par:35, slide:true, map:[
+    '########',
+    '#..B.OO#',
+    '#...BB##',
+    '#PO....#',
+    '#.OO.B.#',
+    '##GB..B#',
+    '########',
+  ]},
+  { name:'92. 氷結の頂', nameEn:'92. Frozen Summit', par:50, slide:true, map:[
+    '#########',
+    '#..B.O..#',
+    '#B..B...#',
+    '#...O.OP#',
+    '#.#OG#..#',
+    '#..B.B..#',
+    '#.O..BOO#',
+    '#########',
+  ]},
+  { name:'93. 絶対零度', nameEn:'93. Absolute Cold', par:42, slide:true, map:[
+    '#########',
+    '#G..B...#',
+    '#.O.BO..#',
+    '#.#BOPO.#',
+    '#B......#',
+    '##B...#.#',
+    '#.....B.#',
+    '#########',
+  ]},
+  { name:'94. 永劫の氷原', nameEn:'94. Eternal Ice Field', par:42, slide:true, map:[
+    '########',
+    '#GBP...#',
+    '#OO#.#.#',
+    '#O..O.B#',
+    '#.BBB..#',
+    '#O....B#',
+    '########',
+  ]},
+  { name:'95. 氷の聖域', nameEn:'95. Sanctum of Ice', par:50, slide:true, map:[
+    '#########',
+    '#OBOOBOO#',
+    '#BBB#BBB#',
+    '#PBOBOO.#',
+    '#B###O###',
+    '#.OB..OG#',
+    '#########',
+  ]},
+  { name:'96. 氷河の難問', nameEn:'96. Glacier Puzzle', par:46, slide:true, map:[
+    '#########',
+    '#OBP.OO##',
+    '##BB.#BO#',
+    '#.BO.OOG#',
+    '#.OB.##O#',
+    '##.B.B..#',
+    '###.#OOO#',
+    '#########',
+  ]},
+  { name:'97. 氷の罠地獄', nameEn:'97. Ice Trap Hell', par:61, slide:true, map:[
+    '##########',
+    '#...#...##',
+    '#G#OP.O.##',
+    '#.###.B..#',
+    '##.BO..###',
+    '##...BB.##',
+    '##.#...###',
+    '##########',
+  ]},
+  { name:'98. 永久凍土', nameEn:'98. Permafrost', par:52, slide:true, map:[
+    '##########',
+    '#OB.#....#',
+    '#B#...##B#',
+    '#...#..BO#',
+    '#P##OOB#.#',
+    '#BO..#OB.#',
+    '#.#G.O#.O#',
+    '##########',
+  ]},
+  { name:'99. 凍れる迷宮', nameEn:'99. Frozen Maze', par:36, slide:true, map:[
+    '########',
+    '#.G#..P#',
+    '#O#OB..#',
+    '#B.B..##',
+    '#O..OB.#',
+    '#B..BOO#',
+    '########',
+  ]},
+  { name:'100. 氷結の深淵', nameEn:'100. Frozen Abyss', par:40, slide:true, map:[
+    '#########',
+    '#.....OO#',
+    '#OB.BP#O#',
+    '#B..OOOB#',
+    '#..BOB.G#',
+    '#.BOBBBO#',
+    '#########',
+  ]},
+];
+
+// tile codes
+const FLOOR=0, WALL=1, HOLE=2, GOAL=3, FILLED=4, BLADE=5;
+
+const board = document.getElementById('board');
+const stepsEl = document.getElementById('steps');
+const bestRecEl = document.getElementById('bestRec');
+const stageNameEl = document.getElementById('stageName');
+const overlay = document.getElementById('overlay');
+const ovTitle = document.getElementById('ovTitle');
+const ovText = document.getElementById('ovText');
+const ovNext = document.getElementById('ovNext');
+const ovRetry = document.getElementById('ovRetry');
+const pickGridEl = document.getElementById('pickGrid');
+const pickerEl = document.getElementById('picker');
+const stagePickNumEl = document.getElementById('stagePickNum');
+
+let cur = 0;            // current level index
+let grid = [];          // 2D tile codes
+let W=0, H=0, T=40;     // size & tile px
+let player = {x:0,y:0,el:null};
+let boulders = [];      // {x,y,el}
+let steps = 0;
+let history = [];
+let cleared = new Set();
+let bestSteps = {};   // ステージindex -> これまでの最小手数(自己ベスト)
+let endlessBest = {}; // エンドレス問題番号 -> 最小手数
+let character = 'explorer';  // 現在のキャラ
+// キャラ定義: id, クラス名, アンロック条件(clearedの数で判定)
+const CHARACTERS = [
+  { id:'explorer', cls:'',           need:0 },
+  { id:'girl',     cls:'char-girl',  need:0 },
+  { id:'cat',      cls:'char-cat',   need:0 },
+  { id:'robot',    cls:'char-robot', need:0 },
+  { id:'alien',    cls:'char-alien', need:0 },
+  { id:'stone',    cls:'char-stone', need:0 },
+  { id:'holekeeper', cls:'char-holekeeper', need:0 },
+  { id:'rune',     cls:'char-rune',  need:0 },
+  { id:'sand',     cls:'char-sand',  need:0 },
+  { id:'pushgod',  cls:'char-pushgod', need:0 },
+  { id:'digbot',   cls:'char-digbot', need:0 },
+  { id:'king',     cls:'char-king',  need:0 },
+];
+function charUnlocked(c){ return cleared.size >= c.need; }
+function charClass(){
+  const c = CHARACTERS.find(c=>c.id===character);
+  return c ? c.cls : '';
+}
+// キャラ別の追加パーツHTML(共通のhead/hat/eye/torsoに差し込む)
+function charPartsHTML(charId){
+  switch(charId){
+    case 'girl': return '';
+    case 'cat':  return '<div class="part ear l"></div><div class="part ear r"></div><div class="part nose"></div><div class="part whisker l"></div><div class="part whisker r"></div><div class="part tail"></div>';
+    case 'robot':return '<div class="part antenna"></div><div class="part mouth"></div><div class="part bolt l"></div><div class="part bolt r"></div>';
+    case 'alien':return '';
+    case 'king': return '<div class="part gem"></div><div class="part beard"></div><div class="part cape"></div>';
+    default: return '';
+  }
+}
+// プレイヤー駒のinnerHTML(キャラに応じてパーツを足す)
+function playerInnerHTML(charId){
+  return '<div class="body">'+charPartsHTML(charId)+'<div class="head"><div class="hat"></div><div class="brow l"></div><div class="brow r"></div><div class="eye l"></div><div class="eye r"></div><div class="mouthf"></div></div><div class="torso"></div></div>';
+}
+function updateCharButton(){
+  const btn=document.getElementById('charBtn2');
+  if(!btn) return;
+  btn.innerHTML='<span class="topCharPreview"><span class="player '+charClass()+'">'+playerInnerHTML(character)+'</span></span>';
+}
+let lang = 'ja';
+const I18N = {
+  ja:{
+    title:'イワオシ', langLabel:'EN',
+    steps:(n,par)=>n+' 歩 / 最善手 '+par, par_unknown:'???',
+    best:(b)=>'自己ベスト '+b,
+    undo:'↩ 1手もどる', reset:'↺ やりなおす',
+    soundOn:'🎵 おんがく', soundOff:'🔇 おんがく',
+    hint:'スワイプか十字キーで移動。岩は押せる。穴は岩で埋めろ!',
+    pickerTitle:'ステージをえらぶ', close:'とじる',
+    themeTitle:'テーマをえらぶ',
+    charTitle:'キャラをえらぶ',
+    charBtn:'🧍 キャラ',
+    charNames:{ explorer:'探検家', girl:'女の子', cat:'ねこ', robot:'ロボット', alien:'宇宙人', stone:'岩霊', holekeeper:'穴守り', rune:'ルーンの子', sand:'砂玉ちゃん', pushgod:'押し神さま', digbot:'発掘ロボ', king:'王さま' },
+    charLock:(n)=>n+'ステージ クリアで解放',
+    endlessStage:(n)=>'エンドレス 第'+n+'問',
+    sharedStage:()=>'共有コース',
+    webLandingText:'このページは、アプリで作った共有コースを遊ぶための場所だよ。<br>共有リンク(#lvl=…付きのURL)から開いてね。',
+    webAppPromo:'<br>ゲーム本編(全ステージ+エンドレス)はアプリで!',
+    webRetry:'もういちど挑戦 ▶',
+    tutSkip:'スキップ', tutNext:'つぎへ', tutStart:'はじめる',
+    tut:[
+      ['🧍','きみは探検家。スワイプか下の十字キーで上下左右に動こう。'],
+      ['🪨','岩は進む向きに押せる。岩の向こう側が空いていないと押せないよ。'],
+      ['🕳','穴は落ちてしまうから通れない。でも岩を押し込めば埋まって道になる!'],
+      ['🚩','光るゴールにたどり着けばクリア。最小手数を目指そう。'],
+      ['↩','詰まったら「1手もどる」や「やりなおす」でいつでもやり直せる。さあ、始めよう!']
+    ],
+    edNeedStart:'スタート(🧍)を1つ置いてください',
+    edNeedGoal:'ゴール(🚩)を1つ置いてください',
+    edChecking:'検証中…',
+    edNoSolution:'このコースは解けません。配置を見直してください。',
+    edTooHard:'複雑すぎて検証できません。少し簡単にしてください。',
+    edSolvable:(L)=>'✓ 解けます!最善 '+L+' 手。共有できます。',
+    edSolvableNoBreak:(L)=>'✓ 解けます(最善 '+L+' 手)。ただし岩を壊さなくても解けます。',
+    edCopied:'リンクをコピーしました!共有してね',
+    edShareText:'この巨石パズル、解ける?',
+    badLink:'リンクが正しくありません。',
+    unsolvable:'このコースは解けないため遊べません。',
+    endlessBtn:'∞ エンドレス',
+    normalBtn:'◀ ステージ選択',
+    nextEndless:'つぎの問題 ▶',
+    toEndless:'エンドレスを始める ▶',
+    winShared:(s)=>'共有コースを '+s+' 歩でクリア!',
+    winSharedP:(s)=>'共有コースを '+s+' 歩でクリア!<br>★ 最善手数タイ!完璧だ!',
+    winEndless:(n,s)=>'第'+n+'問を '+s+' 歩でクリア!',
+    winEndlessP:(n,s)=>'第'+n+'問を '+s+' 歩でクリア!<br>★ 最善手数タイ!完璧だ!',
+    themes:{
+      retro:['レトロ','オリジナルのドット絵UI'],
+      natural:['自然光','陰影が美しい立体的な世界'],
+      vivid:['ビビッド','とにかく派手で爽快なポップ'],
+      forest:['森の絵本','木漏れ日と古い木の、やわらかい冒険'],
+      hero8:['8ビットヒーロー','青く光るレトロSFのステージ'],
+      zen:['和風庭園','石畳と苔、朱色が映える静かな庭']
+    },
+    helpTitle:'あそびかた',
+    helpSecBasics:'きほん',
+    helpSecGimmicks:'ギミック',
+    helpSecModes:'モードと記録',
+    helpItems:{
+      basics:[
+        ['🧍','移動','十字ボタン(またはスワイプ・矢印キー)で1マスずつ動く。ゴールにたどり着けばクリア!'],
+        ['🪨','岩をおす','となりの岩は押して1マス動かせる。壁・別の岩・ゴールの上には押せない。引くことはできない。'],
+        ['🧱','壁','通れない。岩も押し込めない。'],
+        ['🚩','ゴール','ここに立てばクリア。歩数が少ないほど良い記録に。'],
+      ],
+      gimmicks:[
+        ['🕳','穴','そのままでは落ちるので通れない。岩を押し込むと穴が埋まり、通れる床になる。'],
+        ['<span class="hBlade"></span>','刃(やいば)','床から生えた銀色のトゲ。触れられず、道も開かない。岩をぶつけると岩だけが砕け散る——邪魔な岩の「処分場」として使おう。'],
+        ['💥','岩をこわす','💥ボタンがあるステージでは、となりの岩を選んで壊せる(回数制限つき)。壊しても歩数は増えない。岩を直接タップしてもOK。'],
+        ['❄️','氷ステージ','押した岩は壁・岩・ゴールの手前まで滑り続ける。滑った先で穴に落ちたり、刃で砕けたりもする。'],
+      ],
+      modes:[
+        ['🏆','最善手数','各ステージには理論上の最少歩数がある。一度クリアすると表示され、並ぶと「最善手数でクリア!」の称号が。'],
+        ['↺','やりなおし','行き詰まったらリセット。罠の多いステージでは1手のミスが命取り。'],
+        ['∞','エンドレス','自動生成の問題に無限に挑戦。解くほど少しずつ難しくなる。'],
+        ['✏️','コースを作る','エディタで自作コースを作り、リンクで友だちに共有できる。'],
+      ],
+    },
+    prevAria:'前のステージ', nextAria:'次のステージ',
+    clear:'クリア!', allClear:'全クリ!!', perfectClear:'最善手数でクリア!',
+    allClearText:(n)=>'遺跡の封印をすべて解いた!<br>'+n+' 歩でクリア。きみは真の探検家だ!',
+    restart:'1から再挑戦', toFirst:'1にもどる ▶', next:'つぎへ ▶',
+    retry:'リトライ',
+    editorBack:'エディタに戻る',
+    // クリアメッセージ本文(最善達成かどうか)
+    winPerfect:(name,n)=>name+' を '+n+' 歩でクリア!<br>★ 最善手数タイ!完璧だ!',
+    winNormal:(name,n)=>name+' を '+n+' 歩でクリア!',
+    // 3つの数値: 今回 / 自己ベスト / 最善
+    statThis:'今回', statBest:'自己ベスト', statPar:'最善',
+    unit:'歩'
+  },
+  en:{
+    title:'Iwaoshi', langLabel:'JP',
+    steps:(n,par)=>n+' moves / best '+par, par_unknown:'???',
+    best:(b)=>'Best '+b,
+    undo:'↩ Undo', reset:'↺ Restart',
+    soundOn:'🎵 Sound', soundOff:'🔇 Sound',
+    hint:'Swipe or use the D-pad to move. Push boulders. Fill pits with boulders!',
+    pickerTitle:'Select a Stage', close:'Close',
+    themeTitle:'Choose a Theme',
+    charTitle:'Choose a Character',
+    charBtn:'🧍 Character',
+    charNames:{ explorer:'Explorer', girl:'Girl', cat:'Cat', robot:'Robot', alien:'Alien', stone:'Stone Spirit', holekeeper:'Pit Keeper', rune:'Rune Kid', sand:'Sand Orb', pushgod:'Push Deity', digbot:'Dig Bot', king:'King' },
+    charLock:(n)=>'Clear '+n+' stages to unlock',
+    endlessStage:(n)=>'Endless #'+n,
+    sharedStage:()=>'Shared Course',
+    webLandingText:'This page is for playing shared courses made in the app.<br>Open it from a share link (a URL with #lvl=…).',
+    webAppPromo:'<br>Get the app for the full game (all stages + endless)!',
+    webRetry:'Play again ▶',
+    tutSkip:'Skip', tutNext:'Next', tutStart:'Start',
+    tut:[
+      ['🧍','You are the explorer. Swipe or use the D-pad to move up, down, left and right.'],
+      ['🪨','Push boulders in the direction you move. They only move if the space beyond is clear.'],
+      ['🕳','You can\'t cross pits. But push a boulder in to fill it and make a path!'],
+      ['🚩','Reach the glowing goal to clear the stage. Aim for the fewest moves.'],
+      ['↩','Stuck? Use "Undo" or "Restart" anytime. Now, let\'s go!']
+    ],
+    edNeedStart:'Place exactly one start (🧍)',
+    edNeedGoal:'Place exactly one goal (🚩)',
+    edChecking:'Checking…',
+    edNoSolution:'This course is unsolvable. Adjust the layout.',
+    edTooHard:'Too complex to verify. Make it a bit simpler.',
+    edSolvable:(L)=>'✓ Solvable! Best '+L+' moves. Ready to share.',
+    edSolvableNoBreak:(L)=>'✓ Solvable (best '+L+'), but it can be solved without breaking rocks.',
+    edCopied:'Link copied! Share it',
+    edShareText:'Can you solve this boulder puzzle?',
+    badLink:'This link is not valid.',
+    unsolvable:'This course is unsolvable and cannot be played.',
+    endlessBtn:'∞ Endless',
+    normalBtn:'◀ Stages',
+    nextEndless:'Next puzzle ▶',
+    toEndless:'Start Endless ▶',
+    winShared:(s)=>'Cleared the shared course in '+s+' moves!',
+    winSharedP:(s)=>'Cleared the shared course in '+s+' moves!<br>★ Tied the best — perfect!',
+    winEndless:(n,s)=>'Cleared #'+n+' in '+s+' moves!',
+    winEndlessP:(n,s)=>'Cleared #'+n+' in '+s+' moves!<br>★ Tied the best — perfect!',
+    themes:{
+      retro:['Retro','The original pixel-art UI'],
+      natural:['Natural','A dimensional world of soft light'],
+      vivid:['Vivid','Loud, punchy and pure fun'],
+      forest:['Forest Storybook','Soft adventure with sunlit wood and leaves'],
+      hero8:['8-Bit Hero','A blue glowing retro sci-fi stage'],
+      zen:['Zen Garden','Stone paths, moss, and quiet vermilion accents']
+    },
+    helpTitle:'How to Play',
+    helpSecBasics:'Basics',
+    helpSecGimmicks:'Gimmicks',
+    helpSecModes:'Modes & Records',
+    helpItems:{
+      basics:[
+        ['🧍','Move','Use the D-pad (or swipes / arrow keys) to move one tile at a time. Reach the goal to clear the stage!'],
+        ['🪨','Push Rocks','Push an adjacent rock one tile. You can\'t push it into walls, other rocks, or the goal — and you can\'t pull.'],
+        ['🧱','Walls','Impassable. Rocks can\'t be pushed into them either.'],
+        ['🚩','Goal','Stand here to clear the stage. Fewer steps make a better record.'],
+      ],
+      gimmicks:[
+        ['🕳','Pits','You can\'t walk over them. Push a rock in to fill the pit and turn it into walkable floor.'],
+        ['<span class="hBlade"></span>','Blades','Silver spikes rising from the floor — you can\'t touch them and they never open up. Slam a rock into one and only the rock shatters: use blades to dispose of rocks that are in your way.'],
+        ['💥','Break Rocks','On stages with the 💥 button, you can destroy an adjacent rock (limited uses). Breaking costs no steps. Tapping a rock works too.'],
+        ['❄️','Ice Stages','Pushed rocks slide until they hit a wall, rock, or the edge of the goal. They can fall into pits or shatter on blades mid-slide.'],
+      ],
+      modes:[
+        ['🏆','Best Moves','Every stage has a theoretical minimum number of steps. It\'s revealed once you clear the stage — match it for a Perfect Clear!'],
+        ['↺','Reset','Stuck? Start the stage over. On trap-heavy stages one wrong push can be fatal.'],
+        ['∞','Endless','Take on endless auto-generated puzzles that get gradually harder as you solve them.'],
+        ['✏️','Create Courses','Build your own course in the editor and share it with friends via a link.'],
+      ],
+    },
+    prevAria:'Previous stage', nextAria:'Next stage',
+    clear:'CLEAR!', allClear:'ALL CLEAR!!', perfectClear:'PERFECT CLEAR!',
+    allClearText:(n)=>'You broke every seal in the ruins!<br>Cleared in '+n+' moves. A true explorer!',
+    restart:'Restart from 1', toFirst:'Back to 1 ▶', next:'Next ▶',
+    retry:'Retry',
+    editorBack:'Back to editor',
+    winPerfect:(name,n)=>'Cleared '+name+' in '+n+' moves!<br>★ Tied the best — perfect!',
+    winNormal:(name,n)=>'Cleared '+name+' in '+n+' moves!',
+    statThis:'This run', statBest:'Your best', statPar:'Best',
+    unit:'moves'
+  }
+};
+function TX(){ return I18N[lang]; }
+function levelName(i){ return lang==='en' ? LEVELS[i].nameEn : LEVELS[i].name; }
+const STAGE_UNLOCK_GROUPS = [
+  [0,19],
+  [20,34],
+  [35,49],
+  [50,999]
+];
+function stageGroupIndex(i){
+  return STAGE_UNLOCK_GROUPS.findIndex(([a,b])=>i>=a && i<=b);
+}
+function stageGroupCleared(groupIndex){
+  const g=STAGE_UNLOCK_GROUPS[groupIndex];
+  if(!g) return true;
+  const end=Math.min(g[1], LEVELS.length-1);
+  for(let i=g[0]; i<=end; i++){ if(!cleared.has(i)) return false; }
+  return true;
+}
+function isStageUnlocked(i){
+  return true; // TEMP: レベル確認用に全ステージ解放。確認後この行を削除して元に戻す
+  const g=stageGroupIndex(i);
+  if(g<=0) return true;
+  for(let n=0; n<g; n++){ if(!stageGroupCleared(n)) return false; }
+  return true;
+}
+let busy = false;
+let won = false;
+let muted = false, bgmMuted = false;
+let breaksLeft = 0;     // 残り破壊回数
+let breakMode = false;  // 壊すモード(次の方向入力で隣の岩を壊す)
+let slideMode = false;  // このステージで岩が滑るか
+
+/* ---------- sound (WebAudio, generated) ---------- */
+let actx = null, sfxBus = null, ambGain = null, ambStarted = false;
+function audio(){
+  if(!actx){
+    try{
+      actx = new (window.AudioContext||window.webkitAudioContext)();
+      // 効果音バス + 洞窟の残響(フィードバックディレイ)
+      sfxBus = actx.createGain();
+      const dry = actx.createGain(); dry.gain.value = 0.9;
+      const dl = actx.createDelay(1.0); dl.delayTime.value = 0.26;
+      const fb = actx.createGain(); fb.gain.value = 0.38;
+      const lp = actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 1600;
+      const wet = actx.createGain(); wet.gain.value = 0.32;
+      sfxBus.connect(dry).connect(actx.destination);
+      sfxBus.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl);
+      lp.connect(wet); wet.connect(actx.destination);
+      startAmbient();
+    }catch(e){}
+  }
+  if(actx && actx.state==='suspended') actx.resume();
+  return actx;
+}
+function tone(freq, dur, type, vol, when){
+  const a = audio(); if(!a || muted) return;
+  const o=a.createOscillator(), g=a.createGain();
+  o.type=type||'square'; o.frequency.value=freq;
+  g.gain.setValueAtTime(vol||0.06, a.currentTime+(when||0));
+  g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime+(when||0)+dur);
+  o.connect(g).connect(sfxBus);
+  o.start(a.currentTime+(when||0)); o.stop(a.currentTime+(when||0)+dur+0.02);
+}
+
+/* ---------- 洞窟の環境音:フロアごとに変化(すべてWebAudioで合成) ---------- */
+let ambTier=-1, ambGen=0, ambTimers=[], ambNodes=[];
+
+// フロア別パラメータ:第2フロアは低く・不協和に・速く
+const TIERS=[
+ { // フロア1(ステージ1-10) 静かな探検
+   drone:[[55,1],[55.6,1],[110.3,0.25]], droneVol:0.05, dlpF:160,
+   windF:380, windQ:0.7, windVol:0.016, windLfo:0.06,
+   dripMin:1800, dripRange:6500,
+   scale:[110,130.8,146.8,174.6,196,220], noteVol:0.045, noteEvery:[5000,9000],
+   rumble:[12000,20000], heart:false
+ },
+ { // フロア2(ステージ11-20) 深層:三全音のドローン+心拍
+   drone:[[41.2,1],[41.7,1],[58.3,0.6],[82.4,0.3]], droneVol:0.068, dlpF:130,
+   windF:280, windQ:1.2, windVol:0.022, windLfo:0.09,
+   dripMin:1100, dripRange:3800,
+   scale:[103.8,110,116.5,138.6,146.8], noteVol:0.05, noteEvery:[4000,7000],
+   rumble:[7000,14000], heart:true
+ },
+ { // フロア3(ステージ21-) 最深部:うなる重低音+半音クラスタ
+   drone:[[33,1],[33.4,1],[46.7,0.7],[66.2,0.35]], droneVol:0.075, dlpF:110,
+   windF:220, windQ:1.8, windVol:0.027, windLfo:0.12,
+   dripMin:800, dripRange:2800,
+   scale:[98,103.8,110,116.5,123.5], noteVol:0.055, noteEvery:[3000,5500],
+   rumble:[5000,10000], heart:true
+ },
+ { // 爆弾(破壊)ステージ: 火薬庫の緊張感。低音リフ+キックが脈打つ(リズムはシーケンサー側)
+   drone:[[36.7,1],[37.3,1],[55,0.55],[73.4,0.3]], droneVol:0.06, dlpF:120,
+   windF:180, windQ:2.2, windVol:0.02, windLfo:0.15,
+   dripMin:900, dripRange:2600,
+   scale:[92.5,98,110,123.5,138.6], noteVol:0.045, noteEvery:[5000,8000],
+   rumble:[4500,8000], heart:false
+ },
+ { // 氷ステージ: 澄んだ高音の結晶世界。オルゴールの反復アルペジオが主役
+   drone:[[110,1],[164.8,0.6],[220,0.35],[329.6,0.15]], droneVol:0.04, dlpF:900,
+   windF:800, windQ:3.5, windVol:0.017, windLfo:0.2,
+   dripMin:1600, dripRange:4500,
+   scale:[523.3,587.3,659.3,784,880,1046.5], noteVol:0.03, noteEvery:[7000,9000],
+   rumble:[20000,30000], heart:false
+ }
+];
+const TIER_BREAK=3, TIER_ICE=4;   // 上記の特殊ティアのインデックス
+// 現在のステージに対応する環境音ティア(爆弾/氷は専用、通常はフロア進行)
+function ambientTierForCur(){
+  const L=LEVELS[cur];
+  if(L && L.slide) return TIER_ICE;
+  if(L && L.breaks) return TIER_BREAK;
+  return Math.min(2, Math.floor(cur/10));
+}
+function ambientTierForEndless(){
+  if(endlessData && endlessData.slide) return TIER_ICE;
+  return Math.min(2, Math.floor(endlessLevel/6));
+}
+
+function stopAmbient(){
+  ambGen++;
+  ambTimers.forEach(clearTimeout); ambTimers=[];
+  ambNodes.forEach(n=>{ try{n.stop&&n.stop();}catch(e){} try{n.disconnect();}catch(e){} });
+  ambNodes=[];
+  if(ambGain){ try{ambGain.disconnect();}catch(e){} ambGain=null; }
+}
+function setAmbientForLevel(){  if(!actx) return;
+  const tier=ambientTierForCur();
+  if(tier!==ambTier){ stopAmbient(); buildAmbient(tier); }
+}
+function setAmbientForEndless(){ if(!actx) return;
+  const tier=ambientTierForEndless();
+  if(tier!==ambTier){ stopAmbient(); buildAmbient(tier); }
+}
+function startAmbient(){ buildAmbient(endless ? ambientTierForEndless() : ambientTierForCur()); }
+
+function buildAmbient(tier){
+  if(!actx) return;
+  ambTier=tier;
+  const P=TIERS[tier];
+  const icy=(tier===TIER_ICE);   // 氷ステージ専用の音色に差し替える
+  const brk=(tier===TIER_BREAK); // 爆弾ステージ専用のビート
+  const a=actx, gen=ambGen;
+  const later=(fn,ms)=>{ const id=setTimeout(()=>{ if(gen===ambGen) fn(); },ms); ambTimers.push(id); };
+
+  ambGain=a.createGain();
+  ambGain.gain.value = bgmMuted?0:0.0001;
+  ambGain.connect(a.destination);
+  if(!bgmMuted){ // フェードイン
+    ambGain.gain.setValueAtTime(0.0001,a.currentTime);
+    ambGain.gain.linearRampToValueAtTime(1,a.currentTime+1.5);
+  }
+
+  // 深い残響
+  const dl=a.createDelay(1.0); dl.delayTime.value=0.34;
+  const fb=a.createGain(); fb.gain.value=0.45;
+  const elp=a.createBiquadFilter(); elp.type='lowpass'; elp.frequency.value=1800;
+  dl.connect(elp); elp.connect(fb); fb.connect(dl);
+  const wet=a.createGain(); wet.gain.value=0.6;
+  elp.connect(wet).connect(ambGain);
+  ambNodes.push(dl,fb,elp,wet);
+
+  // ドローン(フロア2は三全音=悪魔の音程を含む)
+  const droneG=a.createGain(); droneG.gain.value=P.droneVol;
+  const dlp=a.createBiquadFilter(); dlp.type='lowpass'; dlp.frequency.value=P.dlpF;
+  P.drone.forEach(p=>{
+    const o=a.createOscillator(); o.type='sine'; o.frequency.value=p[0];
+    const g=a.createGain(); g.gain.value=p[1];
+    o.connect(g).connect(dlp); o.start();
+    ambNodes.push(o,g);
+  });
+  dlp.connect(droneG).connect(ambGain);
+  const lfo=a.createOscillator(); lfo.frequency.value=0.05;
+  const lfoG=a.createGain(); lfoG.gain.value=P.droneVol*0.4;
+  lfo.connect(lfoG).connect(droneG.gain); lfo.start();
+  ambNodes.push(droneG,dlp,lfo,lfoG);
+
+  // 風
+  const len=2*a.sampleRate;
+  const buf=a.createBuffer(1,len,a.sampleRate);
+  const ch=buf.getChannelData(0);
+  for(let i=0;i<len;i++) ch[i]=Math.random()*2-1;
+  const noise=a.createBufferSource(); noise.buffer=buf; noise.loop=true;
+  const bp=a.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=P.windF; bp.Q.value=P.windQ;
+  const windG=a.createGain(); windG.gain.value=P.windVol;
+  noise.connect(bp).connect(windG).connect(ambGain); noise.start();
+  const wlfo=a.createOscillator(); wlfo.frequency.value=P.windLfo;
+  const wlfoG=a.createGain(); wlfoG.gain.value=170;
+  wlfo.connect(wlfoG).connect(bp.frequency); wlfo.start();
+  ambNodes.push(noise,bp,windG,wlfo,wlfoG);
+
+  // 水滴(氷面では「ピキッ」という氷の軋みに差し替え)
+  function drip(){
+    if(!bgmMuted){
+      const t=a.currentTime;
+      if(icy){
+        // 氷の軋み: 高域ノイズの破裂 + 下降するガラス質チャープ
+        const nb=a.createBufferSource(); nb.buffer=buf; nb.loop=true;
+        const hp=a.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=2600;
+        const ng=a.createGain();
+        ng.gain.setValueAtTime(0.0001,t);
+        ng.gain.exponentialRampToValueAtTime(0.05,t+0.008);
+        ng.gain.exponentialRampToValueAtTime(0.0001,t+0.07);
+        nb.connect(hp).connect(ng).connect(ambGain);
+        nb.start(t); nb.stop(t+0.09);
+        const o=a.createOscillator(); o.type='sine';
+        const f=2400+Math.random()*1600;
+        o.frequency.setValueAtTime(f,t);
+        o.frequency.exponentialRampToValueAtTime(f*0.45,t+0.06);
+        const g=a.createGain();
+        g.gain.setValueAtTime(0.0001,t);
+        g.gain.exponentialRampToValueAtTime(0.05,t+0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+0.11);
+        o.connect(g); g.connect(ambGain); g.connect(dl);
+        o.start(t); o.stop(t+0.13);
+      } else {
+        const o=a.createOscillator(); o.type='sine';
+        const f=900+Math.random()*900;
+        o.frequency.setValueAtTime(f,t);
+        o.frequency.exponentialRampToValueAtTime(f*0.4,t+0.09);
+        const g=a.createGain();
+        g.gain.setValueAtTime(0.0001,t);
+        g.gain.exponentialRampToValueAtTime(0.09,t+0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+        o.connect(g); g.connect(ambGain); g.connect(dl);
+        o.start(t); o.stop(t+0.2);
+      }
+    }
+    later(drip, P.dripMin+Math.random()*P.dripRange);
+  }
+  if(!brk) later(drip,1000);   // 爆弾ステージでは水滴(鳥の囀りに聞こえる)を鳴らさない
+
+  // 氷面のみ: キラキラの結晶アルペジオ(高音の粒が数個連なって降る)
+  if(icy){
+    function shimmer(){
+      if(!bgmMuted){
+        const t=a.currentTime;
+        const n=3+Math.floor(Math.random()*4);      // 3〜6粒
+        const dir=Math.random()<0.5?1:-1;           // 上昇/下降
+        for(let k=0;k<n;k++){
+          const f=P.scale[Math.floor(Math.random()*P.scale.length)]*(dir>0?(1+k*0.5):(3-k*0.5));
+          const tt=t+k*0.085;
+          const o=a.createOscillator(); o.type='sine'; o.frequency.value=Math.max(500,f);
+          const g=a.createGain();
+          g.gain.setValueAtTime(0.0001,tt);
+          g.gain.exponentialRampToValueAtTime(0.028,tt+0.01);
+          g.gain.exponentialRampToValueAtTime(0.0001,tt+0.5);
+          o.connect(g); g.connect(ambGain); g.connect(dl);
+          o.start(tt); o.stop(tt+0.55);
+        }
+      }
+      later(shimmer, 4000+Math.random()*5000);
+    }
+    later(shimmer,2000);
+  }
+
+  // 神秘の音(フロア2は半音でぶつかる不穏な音階 / 氷面はガラスの鐘)
+  function mysticNote(){
+    if(!bgmMuted){
+      const t=a.currentTime;
+      const f=P.scale[Math.floor(Math.random()*P.scale.length)]*(Math.random()<0.3?2:1);
+      if(icy){
+        // ガラスの鐘: 非整数倍音(2.76x, 5.4x)を重ねた透明な響き
+        [[1,1],[2.76,0.4],[5.4,0.15]].forEach(([r,v])=>{
+          const o=a.createOscillator(); o.type='sine'; o.frequency.value=f*r;
+          const g=a.createGain();
+          g.gain.setValueAtTime(0.0001,t);
+          g.gain.exponentialRampToValueAtTime(P.noteVol*v,t+0.015);
+          g.gain.exponentialRampToValueAtTime(0.0001,t+2.6);
+          o.connect(g); g.connect(ambGain); g.connect(dl);
+          o.start(t); o.stop(t+2.8);
+        });
+      } else {
+        const o=a.createOscillator(); o.type='triangle'; o.frequency.value=f;
+        const g=a.createGain();
+        g.gain.setValueAtTime(0.0001,t);
+        g.gain.linearRampToValueAtTime(P.noteVol,t+0.6);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+3.2);
+        o.connect(g); g.connect(ambGain); g.connect(dl);
+        o.start(t); o.stop(t+3.4);
+      }
+    }
+    later(mysticNote, P.noteEvery[0]+Math.random()*P.noteEvery[1]);
+  }
+  later(mysticNote,3000);
+
+  // 岩鳴り
+  function rumble(){
+    if(!bgmMuted){
+      const t=a.currentTime;
+      const o=a.createOscillator(); o.type='sawtooth';
+      o.frequency.setValueAtTime(38,t);
+      o.frequency.linearRampToValueAtTime(30,t+1.4);
+      const fl=a.createBiquadFilter(); fl.type='lowpass'; fl.frequency.value=90;
+      const g=a.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(0.07,t+0.5);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+1.6);
+      o.connect(fl).connect(g).connect(ambGain);
+      o.start(t); o.stop(t+1.7);
+    }
+    later(rumble, P.rumble[0]+Math.random()*P.rumble[1]);
+  }
+  later(rumble,8000);
+
+  // 心拍(フロア2のみ)。難易度=目安手数が高いほど速くなる
+  if(P.heart){
+    function thump(t,vol){
+      const o=a.createOscillator(); o.type='sine';
+      o.frequency.setValueAtTime(72,t);
+      o.frequency.exponentialRampToValueAtTime(38,t+0.16);
+      const g=a.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(vol,t+0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+      o.connect(g).connect(ambGain);
+      o.start(t); o.stop(t+0.25);
+    }
+    function heartbeat(){
+      const curPar = endless ? (endlessData&&endlessData.par||60) : (LEVELS[cur].par||60);
+      const bpm = 46 + Math.min(38, curPar/4);  // 例: 58手→60bpm, 146手→82bpm
+      if(!bgmMuted){
+        const t=a.currentTime;
+        thump(t,0.16);          // ドクッ
+        thump(t+0.30,0.10);     // …ン
+      }
+      later(heartbeat, 60000/bpm);
+    }
+    later(heartbeat,1500);
+  }
+
+  // 脳幹に刺さるビート: 爆弾=低音リフ+キック+ハット / 氷=オルゴールの反復アルペジオ+遠雷
+  if(icy||brk){
+    const bpm = brk?132:92;
+    const stepDur = 60/bpm/2;            // 8分音符
+    const pat = brk
+      ? [110,110,220,110, 130.8,110,220,164.8, 110,110,220,110, 146.8,164.8,174.6,164.8]      // 唸るリフ(A-C-E + 半音上昇の煽り)
+      : [659.3,784,987.8,1174.7, 1046.5,987.8,784,659.3, 659.3,784,987.8,1174.7, 1318.5,1174.7,987.8,784]; // オルゴール
+    const acc = [1,.55,.85,.55, .95,.55,.85,.7, 1,.55,.85,.55, .95,.8,.9,.8];                 // アクセント(爆弾用)
+    function kick(t,v){
+      const o=a.createOscillator(); o.type='sine';
+      o.frequency.setValueAtTime(110,t);
+      o.frequency.exponentialRampToValueAtTime(36,t+0.12);
+      const g=a.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(v,t+0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.3);
+      o.connect(g).connect(ambGain);
+      o.start(t); o.stop(t+0.32);
+    }
+    function tick(t){
+      const nb=a.createBufferSource(); nb.buffer=buf; nb.loop=true;
+      const hp=a.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=5000;
+      const g=a.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.018,t+0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.04);
+      nb.connect(hp).connect(g).connect(ambGain);
+      nb.start(t); nb.stop(t+0.05);
+    }
+    function boom(t,v){
+      // ボンッ: 丸く短い破裂音(音程が一気に落ちるサイン波 + 低いノイズの一吹き)
+      const o=a.createOscillator(); o.type='sine';
+      o.frequency.setValueAtTime(160,t);
+      o.frequency.exponentialRampToValueAtTime(42,t+0.18);
+      const g=a.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(v,t+0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.35);
+      o.connect(g); g.connect(ambGain); g.connect(dl);
+      o.start(t); o.stop(t+0.4);
+      const nb=a.createBufferSource(); nb.buffer=buf; nb.loop=true;
+      const lp=a.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=380;
+      const ng=a.createGain();
+      ng.gain.setValueAtTime(0.0001,t);
+      ng.gain.exponentialRampToValueAtTime(v*0.6,t+0.01);
+      ng.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+      nb.connect(lp).connect(ng).connect(ambGain);
+      nb.start(t); nb.stop(t+0.25);
+    }
+    function snare(t,v){
+      const nb=a.createBufferSource(); nb.buffer=buf; nb.loop=true;
+      const bp2=a.createBiquadFilter(); bp2.type='bandpass'; bp2.frequency.value=1900; bp2.Q.value=0.8;
+      const g=a.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(v,t+0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
+      nb.connect(bp2).connect(g).connect(ambGain);
+      nb.start(t); nb.stop(t+0.14);
+    }
+    function playStep(s,t){
+      const f=pat[s%pat.length];
+      if(brk){
+        if(f){
+          // 唸る歪み系ベース: ±6セントのデチューンsaw×2 + レゾナントフィルタの開閉
+          const vA=acc[s%16];
+          const fl=a.createBiquadFilter(); fl.type='lowpass'; fl.Q.value=7;
+          fl.frequency.setValueAtTime(300+1200*vA,t);
+          fl.frequency.exponentialRampToValueAtTime(180,t+stepDur*0.85);
+          const g=a.createGain();
+          g.gain.setValueAtTime(0.0001,t);
+          g.gain.exponentialRampToValueAtTime(0.05*vA,t+0.008);
+          g.gain.exponentialRampToValueAtTime(0.0001,t+stepDur*0.95);
+          [0.9965,1.0035].forEach(d=>{
+            const o=a.createOscillator(); o.type='sawtooth'; o.frequency.value=f*d;
+            o.connect(fl); o.start(t); o.stop(t+stepDur);
+          });
+          fl.connect(g).connect(ambGain);
+        }
+        if(s%2===1) tick(t);                          // 裏拍のハット
+        if(s%8===4) snare(t,0.05);                    // 2・4拍のスネア
+        if(s%32===0){ boom(t, s%64===0?0.22:0.14); }  // ボンッ(この拍はキックと重ねない)
+        else if(s%4===0) kick(t, s%16===0?0.15:0.11); // 4つ打ちキック
+      } else {
+        if(f){
+          [[1,0.032],[2.76,0.010]].forEach(([r,v])=>{   // 基音+ガラス質倍音
+            const o=a.createOscillator(); o.type='sine'; o.frequency.value=f*r;
+            const g=a.createGain();
+            g.gain.setValueAtTime(0.0001,t);
+            g.gain.exponentialRampToValueAtTime(v,t+0.008);
+            g.gain.exponentialRampToValueAtTime(0.0001,t+0.55);
+            o.connect(g); g.connect(ambGain); if(r===1)g.connect(dl);
+            o.start(t); o.stop(t+0.6);
+          });
+        }
+        if(s%32===0) kick(t,0.085);             // 2小節ごとの遠い低音
+      }
+    }
+    // オーディオクロック先読みでリズムを正確に刻む(setTimeoutのゆらぎを排除)
+    let seqStep=0, seqNext=a.currentTime+0.4;
+    function seqLoop(){
+      while(seqNext < a.currentTime+0.5){
+        if(!bgmMuted) playStep(seqStep,seqNext);
+        seqStep++; seqNext+=stepDur;
+      }
+      later(seqLoop,120);
+    }
+    later(seqLoop,200);
+  }
+}
+// 最初のタッチ/キー入力で環境音を開始(ブラウザの自動再生制限対策)
+document.addEventListener('pointerdown', ()=>audio(), {once:true});
+document.addEventListener('keydown', ()=>audio(), {once:true});
+const sfx = {
+  step(){ tone(190,0.05,'triangle',0.04); tone(95,0.04,'sine',0.03); },
+  push(){ tone(95,0.12,'sawtooth',0.05); tone(70,0.12,'square',0.04,0.02); },
+  bump(){ tone(60,0.08,'square',0.06); },
+  fall(){ tone(320,0.22,'triangle',0.05); tone(150,0.3,'triangle',0.05,0.07); tone(70,0.4,'sine',0.08,0.14); tone(45,0.45,'sine',0.07,0.18); },
+  goal(){ [392,523,659].forEach((f,i)=>tone(f,0.12,'triangle',0.05,i*0.05)); },
+  brk(){ tone(220,0.06,'square',0.05); tone(140,0.1,'sawtooth',0.05,0.02); tone(80,0.22,'sawtooth',0.06,0.05); tone(55,0.28,'sine',0.06,0.1); },
+  win(){ [523,659,784,1047,1319].forEach((f,i)=>tone(f,0.2,'triangle',0.05,i*0.1)); [262,330,392].forEach((f,i)=>tone(f,0.5,'sine',0.04,0.1+i*0.1)); },
+};
+
+/* ============================================================
+   エンドレスモード:端末内で問題を生成→ソルバー検証→出題
+   サーバー/DB不要。クリアするほど難易度が上がる。
+   ============================================================ */
+let endless = false;          // エンドレス中か
+let endlessLevel = 0;         // 何問目か
+let endlessData = null;       // 現在出題中の {map,par}
+let endlessNext = null;       // 先読みで用意した次問
+let endlessSeed = (Date.now()>>>0);
+function erand(){ endlessSeed|=0; endlessSeed=endlessSeed+0x6D2B79F5|0; let t=Math.imul(endlessSeed^endlessSeed>>>15,1|endlessSeed); t=t+Math.imul(t^t>>>7,61|t)^t; return((t^t>>>14)>>>0)/4294967296; }
+
+// --- 端末内ソルバー(BFS, BigIntビットマスク) ---
+function eSolveLen(grid, cap, breaks, slide){
+  const H=grid.length, W=grid[0].length;
+  breaks = breaks||0;
+  slide = !!slide;
+  let walls=0n, bm=0n, hm=0n, blades=0n, p=-1, goal=-1;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=BigInt(y*W+x), c=grid[y][x];
+    if(c==='#') walls|=1n<<i; else if(c==='B') bm|=1n<<i;
+    else if(c==='O') hm|=1n<<i; else if(c==='X') blades|=1n<<i;
+    else if(c==='P') p=y*W+x; else if(c==='G') goal=y*W+x;
+  }
+  const dirs=[-W,W,-1,1];
+  cap=cap||200000;
+  // 滑る方向に岩を進める。bl=現在の刃。戻り値 {dest, fell(穴), shattered(刃)} or null
+  function slideRock(np, dd, b, h, bl){
+    let cur=np;
+    while(true){
+      const nxt=cur+dd;
+      if(nxt<0||nxt>=W*H) break;
+      if(dd===-1 && cur%W===0) break;
+      if(dd===1 && cur%W===W-1) break;
+      const nb=1n<<BigInt(nxt);
+      if(walls&nb) break;
+      if(b&nb) break;
+      if(nxt===goal) break;
+      if(bl&nb){ return {dest:nxt, shattered:true}; }
+      if(h&nb){ return {dest:nxt, fell:true}; }
+      cur=nxt;
+    }
+    if(cur===np) return null;
+    return {dest:cur, fell:false};
+  }
+  const dist=new Map();
+  dist.set(p+'|'+bm+'|'+hm+'|'+breaks+'|'+blades, 0);
+  let deque=[[p,bm,hm,breaks,blades,0]];
+  while(deque.length){
+    const a=deque.shift(); const pp=a[0],b=a[1],h=a[2],k=a[3],bl=a[4],d=a[5];
+    if(dist.get(pp+'|'+b+'|'+h+'|'+k+'|'+bl)<d) continue;
+    if(pp===goal) return d;
+    for(const dd of dirs){
+      const np=pp+dd;
+      if(np<0||np>=W*H) continue;
+      if(dd===-1 && pp%W===0) continue;
+      if(dd===1 && pp%W===W-1) continue;
+      const bit=1n<<BigInt(np);
+      if(walls&bit) continue;
+      if(bl&bit) continue;        // プレイヤーは(残っている)刃に進めない
+      // 破壊(コスト0)
+      if((b&bit) && k>0){
+        const nb2=b&~bit;
+        const key2=pp+'|'+nb2+'|'+h+'|'+(k-1)+'|'+bl;
+        if(!dist.has(key2) || dist.get(key2)>d){
+          dist.set(key2,d); deque.unshift([pp,nb2,h,k-1,bl,d]);
+        }
+      }
+      if(h&bit) continue;
+      let nb=b, nh=h, nbl=bl;
+      if(b&bit){
+        if(slide){
+          const r=slideRock(np, dd, b, h, bl);
+          if(!r) continue;
+          const bb=1n<<BigInt(r.dest);
+          if(r.shattered){ nb=b&~bit; }             // 岩だけが砕け、刃は残る
+          else if(r.fell){ nb=b&~bit; nh=h&~bb; }
+          else { nb=(b&~bit)|bb; }
+        } else {
+          const nbp=np+dd;
+          if(nbp<0||nbp>=W*H) continue;
+          if(dd===-1 && np%W===0) continue;
+          if(dd===1 && np%W===W-1) continue;
+          const bb=1n<<BigInt(nbp);
+          if((walls&bb)||(b&bb)||nbp===goal) continue;
+          if(bl&bb){ nb=b&~bit; }              // 岩だけが砕け、刃は残る
+          else if(h&bb){ nb=b&~bit; nh=h&~bb; } else nb=(b&~bit)|bb;
+        }
+      }
+      const key=np+'|'+nb+'|'+nh+'|'+k+'|'+nbl;
+      if(!dist.has(key) || dist.get(key)>d+1){
+        dist.set(key,d+1); deque.push([np,nb,nh,k,nbl,d+1]);
+      }
+    }
+    if(dist.size>cap) return -1;
+  }
+  return null;
+}
+function eFirstPushes(grid){
+  const H=grid.length,W=grid[0].length;
+  const walls=new Set(),B=new Set(),O=new Set(); let p=null,goal=null;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const c=grid[y][x];
+    if(c==='#')walls.add(x+','+y);else if(c==='B')B.add(x+','+y);
+    else if(c==='O')O.add(x+','+y);else if(c==='P')p=[x,y];else if(c==='G')goal=[x,y];}
+  const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  const seen=new Set([p[0]+','+p[1]]); let q=[p],head=0;
+  while(head<q.length){const c=q[head++],cx=c[0],cy=c[1];
+    for(const dd of dirs){const nx=cx+dd[0],ny=cy+dd[1],k=nx+','+ny;
+      if(nx<0||ny<0||nx>=W||ny>=H)continue;
+      if(walls.has(k)||O.has(k)||B.has(k)||seen.has(k))continue;
+      seen.add(k);q.push([nx,ny]);}}
+  let count=0;
+  for(const pos of seen){const pr=pos.split(',').map(Number),px=pr[0],py=pr[1];
+    for(const dd of dirs){const tx=px+dd[0],ty=py+dd[1];
+      if(!B.has(tx+','+ty))continue;
+      const bx=tx+dd[0],by=ty+dd[1],bk=bx+','+by;
+      if(bx<0||by<0||bx>=W||by>=H)continue;
+      if(walls.has(bk)||B.has(bk)||(goal[0]===bx&&goal[1]===by))continue;
+      count++;}}
+  return count;
+}
+function eGenBoard(W,H,nw,nb,nh){
+  const cells=[];for(let x=1;x<W-1;x++)for(let y=1;y<H-1;y++)cells.push([x,y]);
+  for(let i=cells.length-1;i>0;i--){const j=Math.floor(erand()*(i+1));const t=cells[i];cells[i]=cells[j];cells[j]=t;}
+  if(nw+nb+nh+2>cells.length)return null;
+  const g=[];for(let y=0;y<H;y++){const row=[];for(let x=0;x<W;x++)row.push((y===0||y===H-1||x===0||x===W-1)?'#':'.');g.push(row);}
+  let k=0;
+  for(let i=0;i<nw;i++){const c=cells[k++];g[c[1]][c[0]]='#';}
+  for(let i=0;i<nb;i++){const c=cells[k++];g[c[1]][c[0]]='B';}
+  for(let i=0;i<nh;i++){const c=cells[k++];g[c[1]][c[0]]='O';}
+  const pp=cells[k++];g[pp[1]][pp[0]]='P';
+  const gg=cells[k++];g[gg[1]][gg[0]]='G';
+  return g.map(r=>r.join(''));
+}
+function eMutate(lv){
+  const g=lv.map(r=>r.split('')); const H=g.length,W=g[0].length;
+  const inner=[];for(let x=1;x<W-1;x++)for(let y=1;y<H-1;y++)inner.push([x,y]);
+  const cells=ch=>inner.filter(c=>g[c[1]][c[0]]===ch);
+  const pick=a=>a[Math.floor(erand()*a.length)];
+  const move=(from)=>{const a=cells(from),f=cells('.');if(!a.length||!f.length)return false;const s=pick(a),t=pick(f);g[s[1]][s[0]]='.';g[t[1]][t[0]]=from;return true;};
+  const op=erand();
+  if(op<0.30){const c=pick(inner);if(g[c[1]][c[0]]==='#')g[c[1]][c[0]]='.';else if(g[c[1]][c[0]]==='.')g[c[1]][c[0]]='#';else return null;}
+  else if(op<0.55){if(!move('B'))return null;}
+  else if(op<0.78){if(!move('O'))return null;}
+  else if(op<0.88){const f=cells('.');if(f.length<2)return null;const a=pick(f),b=pick(f);if(a===b)return null;g[a[1]][a[0]]='B';g[b[1]][b[0]]='O';}
+  else if(op<0.94){if(!move('P'))return null;}
+  else {if(!move('G'))return null;}
+  return g.map(r=>r.join(''));
+}
+// 問題番号 n から目標手数帯を決める(徐々に難化)
+function endlessTargetRange(n){
+  const lo = 12 + n*5;          // 1問目12〜, 増加幅を少し大きく
+  const hi = lo + 18;           // 帯を広めにして生成成功率を確保
+  return [Math.min(lo,120), Math.min(hi,155)];
+}
+function endlessGenerate(n, budgetMs){
+  budgetMs=budgetMs||2200;
+  const range=endlessTargetRange(n), targetMin=range[0], targetMax=range[1];
+  const slide = erand() < 0.35;   // 一定確率で氷ステージ(岩が滑る)を生成
+  const t0=Date.now();
+  let base=null;
+  while(Date.now()-t0<budgetMs*0.4){
+    const W=8+Math.floor(erand()*3),H=7+Math.floor(erand()*2);
+    const styles=[[8,3,2],[5,4,4],[1,4,8]];
+    const st=styles[Math.floor(erand()*styles.length)];
+    const lv=eGenBoard(W,H,st[0],st[1],st[2]);
+    if(!lv)continue;
+    const L=eSolveLen(lv.map(r=>r.split('')),120000,0,slide);
+    if(L!==null&&L!==-1&&L>=12){base={map:lv,par:L};break;}
+  }
+  if(!base)return null;
+  const okQ=lv=>eFirstPushes(lv.map(r=>r.split('')))>=3;
+  if(base.par>=targetMin&&base.par<=targetMax&&okQ(base.map))return {map:base.map,par:base.par,slide};
+  let cur=base, best=base;
+  while(Date.now()-t0<budgetMs){
+    const cand=eMutate(cur.map);
+    if(!cand)continue;
+    const L=eSolveLen(cand.map(r=>r.split('')),200000,0,slide);
+    if(L===null||L===-1)continue;
+    if(L>cur.par||(L===cur.par&&erand()<0.3)){
+      cur={map:cand,par:L};
+      if(L>=targetMin&&L<=targetMax&&okQ(cand)){best=cur;break;}
+      if(L>best.par)best=cur;
+    }
+  }
+  return {map:best.map, par:best.par, slide};
+}
+// 先読み:次の問題をアイドル時間に用意
+function prefetchEndless(){
+  if(endlessNext) return;
+  const gen=()=>{ endlessNext = endlessGenerate(endlessLevel+1, 2200); };
+  if(window.requestIdleCallback) requestIdleCallback(gen,{timeout:1500});
+  else setTimeout(gen, 300);
+}
+
+/* ---------- level setup ---------- */
+// 盤面マップ(文字列配列)を実際に描画する共通処理
+function renderBoard(mapRows){
+  H = mapRows.length; W = mapRows[0].length;
+  grid = []; boulders = [];
+  board.innerHTML = '';
+  board.classList.toggle('slideBoard', !!slideMode);
+  fitTiles();
+  board.style.width = W*T+'px';
+  board.style.height = H*T+'px';
+  for(let y=0;y<H;y++){
+    grid.push([]);
+    for(let x=0;x<W;x++){
+      const c = mapRows[y][x];
+      let code = FLOOR;
+      if(c==='#') code=WALL;
+      else if(c==='O') code=HOLE;
+      else if(c==='G') code=GOAL;
+      else if(c==='X') code=BLADE;
+      grid[y].push(code);
+      makeTile(x,y,code);
+      if(c==='B') addBoulder(x,y);
+      if(c==='P'){ player.x=x; player.y=y; }
+    }
+  }
+  player.el = document.createElement('div');
+  player.el.className='ent player '+charClass();
+  player.el.innerHTML=playerInnerHTML(character);
+  sizeEnt(player.el); place(player.el, player.x, player.y);
+  board.appendChild(player.el);
+  requestAnimationFrame(()=>{ if(typeof relayout==='function') relayout(); });
+}
+function loadLevel(i){
+  if(!isStageUnlocked(i)) return;
+  endless = false;
+  cur = i; steps = 0; history = []; busy=false; won=false;
+  breaksLeft = LEVELS[i].breaks || 0; breakMode=false;
+  slideMode = !!LEVELS[i].slide;
+  overlay.classList.remove('show');
+  renderBoard(LEVELS[i].map);
+  stageNameEl.textContent = levelName(cur);
+  setAmbientForLevel();
+  updateHUD(); renderChips(); updateBreakUI();
+}
+// エンドレス問題を読み込む(data = {map,par})。なければ生成。
+function loadEndless(data){
+  endless = true;
+  steps = 0; history = []; busy=false; won=false;
+  overlay.classList.remove('show');
+  if(!data){ data = endlessGenerate(endlessLevel+1, 2200); }
+  if(!data){ // 万一生成失敗時は易しめで再挑戦
+    data = endlessGenerate(0, 3000) || {map:LEVELS[0].map.slice(), par:LEVELS[0].par};
+  }
+  endlessLevel++;
+  endlessData = data;
+  endlessNext = null;
+  breaksLeft = data.breaks || 0; breakMode=false; slideMode=!!data.slide;
+  renderBoard(data.map);
+  stageNameEl.textContent = TX().endlessStage(endlessLevel);
+  setAmbientForEndless();
+  updateHUD(); renderChips(); updateBreakUI();
+  prefetchEndless();
+}
+function startEndless(){
+  endlessLevel = 0;
+  endlessSeed = (Date.now()>>>0);
+  endlessNext = null;
+  loadEndless(null);
+}
+
+/* ============================================================
+   共有コース:盤面をURLに符号化して送り合う(サーバー/DB不要)
+   形式: #lvl=<W>x<H>:<盤面文字列>  例 #lvl=9x7:##########P......#...
+   盤面文字: # 壁 / B 岩 / O 穴 / P スタート / G ゴール / . 床
+   ============================================================ */
+let sharedMode = false;       // 共有コースを遊んでいるか
+let edTestMode = false;       // エディタのためし遊び中か
+/* ===== Web公開版の制限 =====
+   公開Web(github.io等)では共有コース専用。本編はアプリのみ。
+   アプリ内(capacitor://等)とローカル開発(localhost/127.x/192.168.x)は無制限。 */
+const SHARE_BASE='https://asobiq.github.io/iwaoshi/';   // 共有リンクの基点(公開Web版の場所)
+const APP_STORE_URL='';                                  // ストア公開後にURLを設定
+const WEB_LOCKED=(()=>{
+  try{
+    if(location.search.indexOf('weblock=1')>=0) return true;  // 動作確認用
+    if(location.protocol!=='http:' && location.protocol!=='https:') return false;
+    const h=location.hostname;
+    return !(h==='localhost'||h==='127.0.0.1'||/^192\.168\./.test(h));
+  }catch(e){ return false; }
+})();
+function applyWebLock(){
+  const nav=document.getElementById('stageNav');
+  if(nav) nav.style.display='none';
+}
+function showWebLanding(){
+  applyWebLock();
+  const t=TX();
+  stageNameEl.textContent='';
+  ovTitle.textContent='イワオシ';
+  ovText.innerHTML=t.webLandingText
+    + (APP_STORE_URL ? '<br><a href="'+APP_STORE_URL+'" target="_blank" rel="noopener">App Store</a>' : t.webAppPromo);
+  ovRetry.style.display='none';
+  ovNext.style.display='none';
+  overlay.classList.add('show');
+}
+const LEVEL_URL_ENC = {'#':'w','.':'f','B':'b','O':'o','P':'p','G':'g','X':'x'};
+const LEVEL_URL_DEC = {w:'#',f:'.',b:'B',o:'O',p:'P',g:'G',x:'X'};
+function encodeLevel(mapRows, breaks, slide){
+  const W=mapRows[0].length, H=mapRows.length;
+  const flat=mapRows.join('').split('').map(ch=>LEVEL_URL_ENC[ch]||ch).join('');
+  let s='lvl='+W+'x'+H+':'+flat;
+  if(breaks && breaks>0) s+=':b'+breaks;
+  if(slide) s+=':s1';
+  return s;
+}
+function decodeLevel(hash){
+  // hash例: "lvl=9x7:#####..." / "#lvl=9x7:...:b2" / "...:s1"
+  let src=hash||'';
+  try{ src=decodeURIComponent(src); }catch(e){}
+  const m=/lvl=(\d+)x(\d+):([#.BOPGXwfbopgx]+)((?::b\d+)?(?::s1)?)/.exec(src);
+  if(!m) return null;
+  const W=+m[1], H=+m[2], flat=m[3].split('').map(ch=>LEVEL_URL_DEC[ch]||ch).join('');
+  const opts=m[4]||'';
+  const bm=/:b(\d+)/.exec(opts); const breaks = bm ? +bm[1] : 0;
+  const slide = /:s1/.test(opts);
+  if(flat.length!==W*H) return null;
+  const rows=[];
+  for(let y=0;y<H;y++) rows.push(flat.slice(y*W,(y+1)*W));
+  const all=rows.join('');
+  if((all.split('P').length-1)!==1 || (all.split('G').length-1)!==1) return null;
+  return { rows, breaks, slide };
+}
+// 共有コースを「エンドレスの1問」として読み込む。解けなければ false
+function loadShared(rows, breaks, slide){
+  breaks = breaks||0; slide=!!slide;
+  const L = eSolveLen(rows.map(r=>r.split('')), 3000000, breaks, slide);
+  if(L===null || L===-1) return false;   // 解けない/重すぎる
+  endless = true; sharedMode = true;
+  endlessLevel = 1;
+  steps=0; history=[]; busy=false; won=false;
+  breaksLeft = breaks; breakMode=false; slideMode=slide;
+  overlay.classList.remove('show');
+  endlessData = { map:rows.slice(), par:L, breaks:breaks, slide:slide };
+  endlessNext = null;
+  renderBoard(endlessData.map);
+  stageNameEl.textContent = TX().sharedStage();
+  setAmbientForEndless();
+  updateHUD(); renderChips(); updateBreakUI();
+  return true;
+}
+// 起動時にURLの#lvl=を検出して共有コースを起動
+function checkSharedURL(){
+  const h = location.hash || '';
+  if(h.indexOf('lvl=')<0) return false;
+  const dec = decodeLevel(h);
+  if(!dec){ alert(TX().badLink); return false; }
+  audio();
+  if(!loadShared(dec.rows, dec.breaks, dec.slide)){ alert(TX().unsolvable); return false; }
+  return true;
+}
+
+/* ============================================================
+   コースエディタ:盤面を作る → ソルバーで検証 → 共有リンク生成
+   ============================================================ */
+let edW=9, edH=7, edGrid=[], edTool='P', edValid=null, edTileSize=40, edBreaks=0, edSlide=false;
+const editorEl=document.getElementById('editor');
+const editorBoardEl=document.getElementById('editorBoard');
+const editorMsgEl=document.getElementById('editorMsg');
+function edBlank(){
+  edGrid=[];
+  for(let y=0;y<edH;y++){const row=[];for(let x=0;x<edW;x++){
+    row.push((x===0||y===0||x===edW-1||y===edH-1)?'#':'.');
+  }edGrid.push(row);}
+  // 初期スタートとゴール
+  edGrid[1][1]='P'; edGrid[edH-2][edW-2]='G';
+}
+function edFit(){
+  const wrap=document.getElementById('editorBoardWrap');
+  const aw=wrap.clientWidth-8, ah=wrap.clientHeight-8;
+  edTileSize=Math.max(20, Math.min(Math.floor(aw/edW), Math.floor(ah/edH), 48));
+}
+function edRender(){
+  edFit();
+  const wv=document.getElementById('edWSel'); if(wv) wv.value=edW;
+  const hv=document.getElementById('edHSel'); if(hv) hv.value=edH;
+  editorBoardEl.innerHTML='';
+  editorBoardEl.style.width=edW*edTileSize+'px';
+  editorBoardEl.style.height=edH*edTileSize+'px';
+  const glyph={'#':'🧱','B':'🪨','O':'🕳','P':'🧍','G':'🚩','.':''};
+  const iceFloor='linear-gradient(135deg,#cdeefb,#a6d8f0)';
+  const iceHole='radial-gradient(circle at 50% 40%,#06314a,#021824)';
+  const bg = edSlide
+    ? {'#':'var(--wallGrad)','B':iceFloor,'O':iceHole,'P':iceFloor,'G':'var(--goalGrad)','.':iceFloor}
+    : {'#':'var(--wallGrad)','B':'var(--floorGrad)','O':'var(--holeGrad)','P':'var(--floorGrad)','G':'var(--goalGrad)','.':'var(--floorGrad)'};
+  for(let y=0;y<edH;y++)for(let x=0;x<edW;x++){
+    const c=edGrid[y][x];
+    const t=document.createElement('div');
+    t.className='eTile';
+    t.style.width=edTileSize+'px'; t.style.height=edTileSize+'px';
+    t.style.left=x*edTileSize+'px'; t.style.top=y*edTileSize+'px';
+    t.style.background=bg[c]||'var(--floorGrad)';
+    t.style.fontSize=Math.floor(edTileSize*0.5)+'px';
+    t.style.display='flex'; t.style.alignItems='center'; t.style.justifyContent='center';
+    t.textContent=glyph[c]||'';
+    t.onclick=()=>edPaint(x,y);
+    editorBoardEl.appendChild(t);
+  }
+}
+function edPaint(x,y){
+  // 外周は壁固定(編集不可)
+  if(x===0||y===0||x===edW-1||y===edH-1) return;
+  if(edTool==='P'){ // スタートは1つだけ
+    for(let yy=0;yy<edH;yy++)for(let xx=0;xx<edW;xx++) if(edGrid[yy][xx]==='P') edGrid[yy][xx]='.';
+  }
+  if(edTool==='G'){ for(let yy=0;yy<edH;yy++)for(let xx=0;xx<edW;xx++) if(edGrid[yy][xx]==='G') edGrid[yy][xx]='.'; }
+  edGrid[y][x]=edTool;
+  edValid=null; setShareEnabled(false);
+  editorMsgEl.textContent=''; editorMsgEl.className='';
+  edRender();
+}
+function edRows(){ return edGrid.map(r=>r.join('')); }
+function setShareEnabled(on){
+  document.getElementById('edShare').disabled=!on;
+  document.getElementById('edTest').disabled=!on;
+  document.getElementById('edSave').disabled=!on;
+}
+function edCheck(){
+  const rows=edRows(), all=rows.join('');
+  const t=TX();
+  if((all.split('P').length-1)!==1){ editorMsgEl.textContent=t.edNeedStart; editorMsgEl.className='ng'; return; }
+  if((all.split('G').length-1)!==1){ editorMsgEl.textContent=t.edNeedGoal; editorMsgEl.className='ng'; return; }
+  editorMsgEl.textContent=t.edChecking; editorMsgEl.className='';
+  setTimeout(()=>{
+    const L=eSolveLen(rows.map(r=>r.split('')), 3000000, edBreaks, edSlide);
+    if(L===null){ editorMsgEl.textContent=t.edNoSolution; editorMsgEl.className='ng'; setShareEnabled(false); edValid=null; return; }
+    if(L===-1){ editorMsgEl.textContent=t.edTooHard; editorMsgEl.className='ng'; setShareEnabled(false); edValid=null; return; }
+    // 壊し回数が設定されている場合、その回数を「ちゃんと使わないと解けない」か確認
+    if(edBreaks>0){
+      const without=eSolveLen(rows.map(r=>r.split('')), 3000000, 0, edSlide);
+      if(without!==null && without!==-1){
+        // 壊さなくても解けてしまう → 壊し必須の設計になっていない(警告するが共有は許可)
+        editorMsgEl.textContent=t.edSolvableNoBreak(L); editorMsgEl.className='ok';
+        setShareEnabled(true); edValid={map:rows.slice(),par:L,breaks:edBreaks,slide:edSlide};
+        return;
+      }
+    }
+    editorMsgEl.textContent=t.edSolvable(L); editorMsgEl.className='ok';
+    setShareEnabled(true); edValid={map:rows.slice(),par:L,breaks:edBreaks,slide:edSlide};
+  }, 30);
+}
+function edShare(){
+  if(!edValid) return;
+  // どこで作ってもリンクは公開Web版を指す(アプリ内のcapacitor://等は他人が開けないため)
+  const url=SHARE_BASE+'#'+encodeLevel(edValid.map, edValid.breaks, edValid.slide);
+  const t=TX();
+  const done=()=>{ editorMsgEl.textContent=t.edCopied; editorMsgEl.className='ok'; };
+  if(navigator.share){
+    navigator.share({title:'イワオシ', text:t.edShareText, url}).then(done).catch(()=>{copyText(url,done);});
+  }else{ copyText(url,done); }
+}
+function copyText(text, cb){
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(cb).catch(()=>fallbackCopy(text,cb));
+  }else fallbackCopy(text,cb);
+}
+function fallbackCopy(text, cb){
+  try{
+    const ta=document.createElement('textarea'); ta.value=text;
+    ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); document.body.removeChild(ta); cb();
+  }catch(e){ prompt('URL', text); }
+}
+let edTestSaved = null;  // ためし遊び前のエディタ盤面(戻る用)
+function edTest(){
+  if(!edValid) return;
+  edTestSaved = { grid: edGrid.map(r=>r.slice()), w:edW, h:edH, breaks:edBreaks, slide:edSlide };
+  edTestMode = true;
+  closeEditor();
+  loadShared(edValid.map.slice(), edValid.breaks||0, edValid.slide||false);
+  showEdBackBtn(true);
+}
+// ためし遊び中の「エディタに戻る」ボタンの表示切替
+function showEdBackBtn(on){
+  let btn=document.getElementById('edBackBtn');
+  const topbar=document.getElementById('topbar');
+  if(on){
+    if(!btn){
+      btn=document.createElement('button');
+      btn.id='edBackBtn';
+      btn.onclick=edBackToEditor;
+    }
+    btn.textContent = '◀ ' + TX().editorBack;
+    topbar.insertBefore(btn, topbar.firstChild);
+    topbar.classList.add('testPlay');
+    document.getElementById('stageNav').style.display='none';   // ためし遊び中はステージ選択を隠す
+    btn.style.display='block';
+  } else if(btn){
+    btn.style.display='none';
+    if(topbar) topbar.classList.remove('testPlay');
+    document.getElementById('stageNav').style.display='';
+  }
+}
+function edBackToEditor(){
+  edTestMode=false; sharedMode=false; endless=false;
+  showEdBackBtn(false);
+  overlay.classList.remove('show');
+  // エディタを復元して開く
+  if(edTestSaved){
+    editorEl.classList.add('show');
+    edW=edTestSaved.w; edH=edTestSaved.h; edBreaks=edTestSaved.breaks; edSlide=edTestSaved.slide;
+    edGrid=edTestSaved.grid.map(r=>r.slice());
+    edBuildSelects();
+    document.getElementById('edBreakSel').value=String(edBreaks);
+    document.getElementById('edSlideSel').value=edSlide?'1':'0';
+    setShareEnabled(true);
+    editorMsgEl.textContent=''; editorMsgEl.className='';
+    requestAnimationFrame(edRender);
+    setTimeout(edRender,80);
+  } else {
+    openEditor();
+  }
+}
+function openEditor(){
+  edTestMode=false; showEdBackBtn(false);
+  edBlank(); edTool='P'; edValid=null; edBreaks=0; edSlide=false;
+  edBuildSelects();
+  document.getElementById('edBreakSel').value='0';
+  document.getElementById('edSlideSel').value='0';
+  document.querySelectorAll('.palBtn').forEach(b=>b.classList.toggle('sel', b.dataset.tool==='P'));
+  setShareEnabled(false);
+  document.getElementById('edSaveRow').style.display='none';
+  document.getElementById('editorActions').style.display='';
+  editorMsgEl.textContent=''; editorMsgEl.className='';
+  editorEl.classList.add('show');
+  requestAnimationFrame(edRender);
+  setTimeout(edRender,80);
+}
+// 幅・高さ・壊しのselect選択肢を作る(初回のみ)
+function edBuildSelects(){
+  const wsel=document.getElementById('edWSel'), hsel=document.getElementById('edHSel'), bsel=document.getElementById('edBreakSel');
+  if(wsel && wsel.options.length===0){ for(let i=6;i<=12;i++){ const o=document.createElement('option'); o.value=i;o.textContent=i; wsel.appendChild(o);} }
+  if(hsel && hsel.options.length===0){ for(let i=6;i<=11;i++){ const o=document.createElement('option'); o.value=i;o.textContent=i; hsel.appendChild(o);} }
+  if(bsel && bsel.options.length===0){ for(let i=0;i<=5;i++){ const o=document.createElement('option'); o.value=i;o.textContent=i; bsel.appendChild(o);} }
+  wsel.value=edW; hsel.value=edH; bsel.value=edBreaks;
+}
+function closeEditor(){ editorEl.classList.remove('show'); }
+
+/* ---------- チュートリアル(初回のみ自動表示) ---------- */
+let tutStep=0;
+const tutorialEl=document.getElementById('tutorial');
+function showTutorial(){ tutStep=0; tutorialEl.classList.add('show'); renderTutStep(); }
+function renderTutStep(){
+  const t=TX(); const steps=t.tut; const s=steps[tutStep];
+  document.getElementById('tutIcon').textContent=s[0];
+  document.getElementById('tutText').textContent=s[1];
+  document.getElementById('tutSkip').textContent=t.tutSkip;
+  document.getElementById('tutNext').textContent=(tutStep===steps.length-1)?t.tutStart:t.tutNext;
+  const dots=document.getElementById('tutDots'); dots.innerHTML='';
+  steps.forEach((_,i)=>{ const d=document.createElement('i'); if(i===tutStep)d.className='on'; dots.appendChild(d); });
+}
+function nextTut(){
+  const steps=TX().tut;
+  if(tutStep<steps.length-1){ tutStep++; renderTutStep(); }
+  else closeTutorial();
+}
+function closeTutorial(){
+  tutorialEl.classList.remove('show');
+  try{ localStorage.setItem('kyoseki_tut_done','1'); }catch(e){}
+}
+document.getElementById('tutNext').onclick=nextTut;
+document.getElementById('tutSkip').onclick=closeTutorial;
+
+document.querySelectorAll('.palBtn').forEach(b=>{
+  b.onclick=()=>{ edTool=b.dataset.tool; document.querySelectorAll('.palBtn').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); };
+});
+document.getElementById('editorStart').onclick=()=>{ closePicker(); openEditor(); };
+document.getElementById('myCoursesStart').onclick=()=>{ openMyCourses(); };
+document.getElementById('myCoursesClose').onclick=()=>{ document.getElementById('myCourses').classList.remove('show'); };
+function openMyCourses(){
+  renderMyCourses();
+  document.getElementById('myCourses').classList.add('show');
+}
+function renderMyCourses(){
+  const list=getCourses();
+  const box=document.getElementById('myCoursesList');
+  box.innerHTML='';
+  if(list.length===0){
+    const e=document.createElement('div'); e.id='myCoursesEmpty';
+    e.textContent=(lang==='en')?'No saved courses yet. Create one in the editor!':'保存したコースはまだありません。エディタで作ってみよう!';
+    box.appendChild(e); return;
+  }
+  list.forEach(c=>{
+    const item=document.createElement('div'); item.className='courseItem';
+    const name=document.createElement('span'); name.className='cName'; name.textContent=c.name;
+    const meta=document.createElement('span'); meta.className='cMeta';
+    const tags=[]; if(c.slide)tags.push('❄️'); if(c.breaks)tags.push('💥'+c.breaks);
+    meta.textContent=(c.par?('★'+c.par):'')+(tags.length?(' '+tags.join(' ')):'');
+    const play=document.createElement('button'); play.className='cPlay'; play.textContent=(lang==='en')?'Play':'遊ぶ';
+    play.onclick=()=>{
+      document.getElementById('myCourses').classList.remove('show');
+      closePicker();
+      loadShared(c.map.slice(), c.breaks||0, c.slide||false);
+    };
+    const link=document.createElement('button'); link.className='cLink'; link.textContent=(lang==='en')?'🔗 Link':'🔗 リンク';
+    link.onclick=()=>{
+      const base=location.origin+location.pathname;
+      const url=base+'#'+encodeLevel(c.map, c.breaks||0, c.slide||false);
+      const orig=link.textContent;
+      copyText(url, ()=>{ link.textContent=(lang==='en')?'✓ Copied':'✓ コピー'; setTimeout(()=>{ link.textContent=orig; },1500); });
+    };
+    const del=document.createElement('button'); del.className='cDel'; del.textContent=(lang==='en')?'Delete':'削除';
+    let armed=false;
+    del.onclick=()=>{
+      if(!armed){
+        armed=true;
+        del.textContent=(lang==='en')?'Sure?':'本当に?';
+        del.style.background='#c0392b'; del.style.color='#fff';
+        setTimeout(()=>{ armed=false; del.textContent=(lang==='en')?'Delete':'削除'; del.style.background=''; del.style.color=''; }, 2500);
+      }else{
+        deleteCourse(c.id); renderMyCourses();
+      }
+    };
+    item.appendChild(name); item.appendChild(meta); item.appendChild(play); item.appendChild(link); item.appendChild(del);
+    box.appendChild(item);
+  });
+}
+document.getElementById('editorExit').onclick=closeEditor;
+document.getElementById('edCheck').onclick=edCheck;
+document.getElementById('edShare').onclick=edShare;
+document.getElementById('edTest').onclick=edTest;
+document.getElementById('edSave').onclick=function(){
+  if(!edValid) return;
+  const row=document.getElementById('edSaveRow');
+  const inp=document.getElementById('edNameInput');
+  inp.value = (lang==='en'?'My Course':'マイコース')+' '+(getCourses().length+1);
+  inp.placeholder = (lang==='en'?'Course name':'コース名');
+  row.style.display='flex';
+  document.getElementById('editorActions').style.display='none';  // 重複する保存ボタンを隠す
+  inp.focus(); inp.select();
+};
+document.getElementById('edSaveCancel').onclick=function(){
+  document.getElementById('edSaveRow').style.display='none';
+  document.getElementById('editorActions').style.display='';
+};
+document.getElementById('edSaveConfirm').onclick=function(){
+  if(!edValid) return;
+  const inp=document.getElementById('edNameInput');
+  const name=(inp.value||'').trim() || (lang==='en'?'My Course':'マイコース');
+  const ok = saveCourse({ name, map:edValid.map.slice(), breaks:edValid.breaks||0, slide:!!edValid.slide, par:edValid.par });
+  document.getElementById('edSaveRow').style.display='none';
+  document.getElementById('editorActions').style.display='';
+  editorMsgEl.textContent = ok ? (lang==='en'?'✓ Saved to My Courses!':'✓ マイコースに保存しました!') : (lang==='en'?'Save failed':'保存に失敗しました');
+  editorMsgEl.className = ok?'ok':'ng';
+};
+document.getElementById('edWSel').onchange=function(){ edW=+this.value; edBlank(); edRender(); edValid=null; setShareEnabled(false); editorMsgEl.textContent=''; };
+document.getElementById('edHSel').onchange=function(){ edH=+this.value; edBlank(); edRender(); edValid=null; setShareEnabled(false); editorMsgEl.textContent=''; };
+document.getElementById('edBreakSel').onchange=function(){ edBreaks=+this.value; edValid=null; setShareEnabled(false); editorMsgEl.textContent=''; };
+document.getElementById('edSlideSel').onchange=function(){ edSlide=(this.value==='1'); edValid=null; setShareEnabled(false); editorMsgEl.textContent=''; edRender(); };
+window.addEventListener('resize',()=>{ if(editorEl.classList.contains('show')) edRender(); });
+
+function makeTile(x,y,code){
+  const t = document.createElement('div');
+  t.className = 'tile ' + ['floor','wall','hole','goal','filled','blade'][code];
+  if(code===FLOOR && (x+y)%2) t.classList.add('alt');
+  if(code===BLADE) t.innerHTML='<div class="spikes"></div>';
+  t.style.width=T+'px'; t.style.height=T+'px';
+  t.style.left = x*T+'px'; t.style.top = y*T+'px';
+  t.dataset.x=x; t.dataset.y=y;
+  board.appendChild(t);
+}
+function setTile(x,y,code){
+  grid[y][x]=code;
+  const old = board.querySelector('.tile[data-x="'+x+'"][data-y="'+y+'"]');
+  if(old) old.remove();
+  makeTile(x,y,code);
+}
+function addBoulder(x,y){
+  const el = document.createElement('div');
+  el.className='ent boulder';
+  el.innerHTML='<div class="rock"></div>';
+  sizeEnt(el); place(el,x,y);
+  board.appendChild(el);
+  const bobj={x,y,el};
+  boulders.push(bobj);
+  el.onclick=(e)=>{ e.stopPropagation(); tryBreakBoulder(bobj); };
+}
+// 岩オブジェクトを壊す(隣接&残回数チェック)
+function tryBreakBoulder(b){
+  if(busy||won) return;
+  if(breaksLeft<=0) return;
+  // プレイヤーが上下左右に隣接しているか
+  const adj = (Math.abs(b.x-player.x)+Math.abs(b.y-player.y))===1;
+  if(!adj){ flashBreakHint(); return; }
+  audio();
+  snapshot();
+  breaksLeft--;
+  breakMode=false;
+  sfx.brk();
+  spawnShards(b.x, b.y);   // 崩れた破片を飛散
+  b.el.classList.add('breaking');
+  busy=true;
+  const tgt=b;
+  setTimeout(()=>{
+    tgt.el.remove();
+    boulders=boulders.filter(o=>o!==tgt);
+    busy=false;
+  },260);
+  setFace('face-push');
+  updateBreakUI(); updateHUD();
+}
+// 岩が砕けた破片を飛ばす
+function spawnShards(x,y){
+  const n=6;
+  const cx=x*T+T/2, cy=y*T+T/2;
+  for(let i=0;i<n;i++){
+    const s=document.createElement('div');
+    s.className='shard';
+    const sz=Math.max(4,Math.floor(T*0.16));
+    s.style.width=sz+'px'; s.style.height=sz+'px';
+    s.style.left=(cx-sz/2)+'px'; s.style.top=(cy-sz/2)+'px';
+    board.appendChild(s);
+    const ang=(Math.PI*2*i/n)+Math.random()*0.6;
+    const dist=T*(0.4+Math.random()*0.5);
+    const dx=Math.cos(ang)*dist, dy=Math.sin(ang)*dist - T*0.2;
+    s.animate([
+      {transform:'translate(0,0) rotate(0)', opacity:1},
+      {transform:`translate(${dx}px,${dy}px) rotate(${Math.random()*360}deg)`, opacity:0}
+    ], {duration:300+Math.random()*120, easing:'cubic-bezier(.3,.7,.5,1)'});
+    setTimeout(()=>s.remove(), 440);
+  }
+}
+// 隣接していない岩をタップしたとき、壊すボタンを軽く点滅(気づき用)
+function flashBreakHint(){
+  const el=document.getElementById('breakBtn');
+  if(!el) return;
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+}
+function sizeEnt(el){ el.style.width=T+'px'; el.style.height=T+'px'; }
+function place(el,x,y){ el.style.transform='translate('+x*T+'px,'+y*T+'px)'; }
+function fitTiles(){
+  const wrap = document.getElementById('boardWrap');
+  const aw = wrap.clientWidth-16, ah = wrap.clientHeight-16;
+  T = Math.floor(Math.min(aw/W, ah/H, 52));
+  if(T<22) T=22;
+}
+function boulderAt(x,y){ return boulders.find(b=>b.x===x&&b.y===y); }
+
+/* ---------- movement ---------- */
+function snapshot(){
+  history.push({
+    px:player.x, py:player.y,
+    breaks: breaksLeft,
+    bs:boulders.map(b=>[b.x,b.y]),
+    filled:[].concat(...grid.map((row,y)=>row.map((c,x)=>c===FILLED?[x,y]:null).filter(Boolean))),
+    blades:[].concat(...grid.map((row,y)=>row.map((c,x)=>c===BLADE?[x,y]:null).filter(Boolean)))
+  });
+  if(history.length>200) history.shift();
+}
+// 表情を一時的に付ける(ms後に通常へ戻す)。win等は持続。
+const FACE_CLASSES=['face-push','face-bump','face-happy','face-win','face-worry'];
+let faceTimer=null;
+function setFace(face, hold){
+  if(!player||!player.el) return;
+  FACE_CLASSES.forEach(f=>player.el.classList.remove(f));
+  if(faceTimer){ clearTimeout(faceTimer); faceTimer=null; }
+  if(face){
+    player.el.classList.add(face);
+    if(!hold){ faceTimer=setTimeout(()=>{ if(player&&player.el) player.el.classList.remove(face); }, 600); }
+  }
+}
+function tryMove(dx,dy){
+  if(busy||won||!player.el) return;
+  audio();
+  // 壊すモード中: 隣に岩があれば壊す。なければモード解除
+  if(breakMode){
+    breakMode=false; updateBreakUI();
+    const tx=player.x+dx, ty=player.y+dy;
+    const tb=boulderAt(tx,ty);
+    if(tb){ tryBreakBoulder(tb); return; }
+    return;
+  }
+  const nx=player.x+dx, ny=player.y+dy;
+  if(nx<0||ny<0||nx>=W||ny>=H) return bumpAnim(dx,dy);
+  const t = grid[ny][nx];
+  if(t===WALL || t===HOLE || t===BLADE) return bumpAnim(dx,dy);  // 刃には進めない
+
+  const b = boulderAt(nx,ny);
+  if(b){
+    let bx, by, bt, shattered=false;
+    if(slideMode){
+      // 岩は壁/別の岩/盤端/ゴールの手前まで滑る。穴があれば落ちて埋まる。刃に達したら砕ける。
+      let cx=nx, cy=ny, fell=false;
+      while(true){
+        const tx=cx+dx, ty=cy+dy;
+        if(tx<0||ty<0||tx>=W||ty>=H) break;
+        const tt=grid[ty][tx];
+        if(tt===WALL||tt===GOAL) break;
+        if(boulderAt(tx,ty)) break;
+        if(tt===BLADE){ cx=tx; cy=ty; shattered=true; break; }
+        if(tt===HOLE){ cx=tx; cy=ty; fell=true; break; }
+        cx=tx; cy=ty;
+      }
+      if(cx===nx && cy===ny) return bumpAnim(dx,dy); // 1マスも動けない
+      bx=cx; by=cy; bt=shattered?BLADE:(fell?HOLE:grid[by][bx]);
+    } else {
+      bx=nx+dx; by=ny+dy;
+      if(bx<0||by<0||bx>=W||by>=H) return bumpAnim(dx,dy);
+      bt = grid[by][bx];
+      if(bt===WALL || bt===GOAL || boulderAt(bx,by)) return bumpAnim(dx,dy);
+      if(bt===BLADE) shattered=true;
+    }
+    snapshot();
+    busy=true;
+    if(slideMode){ b.el.classList.add('sliding'); setTimeout(()=>b.el.classList.remove('sliding'),220); }
+    b.x=bx; b.y=by; place(b.el,bx,by);
+    b.el.classList.remove('pushed'); void b.el.offsetWidth; b.el.classList.add('pushed');
+    movePlayer(nx,ny,true);
+    if(shattered){
+      // 刃に当たって砕ける: 岩だけが消え、刃は残る(道は開かない)
+      sfx.brk();
+      spawnShards(bx,by);
+      b.el.classList.add('breaking');
+      const tgt=b;
+      setTimeout(()=>{
+        tgt.el.remove();
+        boulders=boulders.filter(o=>o!==tgt);
+        busy=false;
+      }, slideMode?240:200);
+      setFace('face-bump');   // 岩を失って困惑
+    } else if(bt===HOLE){
+      sfx.fall();
+      b.el.remove();
+      boulders = boulders.filter(o=>o!==b);
+      setTile(bx,by,FILLED);
+      setFace('face-happy');   // 穴を埋めて満足げ
+      setTimeout(()=>busy=false,slideMode?200:130);
+    } else {
+      sfx.push();
+      setFace('face-push');    // 押して踏ん張り顔
+      setTimeout(()=>busy=false,slideMode?200:130);
+    }
+  } else {
+    snapshot();
+    sfx.step();
+    movePlayer(nx,ny);
+  }
+}
+function movePlayer(nx,ny,pushing){
+  player.x=nx; player.y=ny;
+  place(player.el,nx,ny);
+  if(!pushing){ player.el.classList.remove('step'); void player.el.offsetWidth; player.el.classList.add('step'); }
+  steps++; updateHUD();
+  if(grid[ny][nx]===GOAL){
+    won=true;
+    sfx.goal();
+    setFace('face-win', true);   // ゴールで歓喜(持続)
+    board.classList.remove('cleared'); void board.offsetWidth; board.classList.add('cleared');
+    setTimeout(showWin,300);
+  }
+}
+function bumpAnim(dx,dy){
+  sfx.bump();
+  setFace('face-bump');   // ぶつかって目を回す
+  player.el.style.setProperty('--bx',(dx*5)+'px');
+  player.el.style.setProperty('--by',(dy*5)+'px');
+  player.el.classList.remove('bump');
+  void player.el.offsetWidth;
+  player.el.classList.add('bump');
+}
+function undo(){
+  if(won||busy) return;
+  const s = history.pop();
+  if(!s) return;
+  // rebuild filled tiles: reset any FILLED not in snapshot back to HOLE, and apply snapshot fills
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    if(grid[y][x]===FILLED && !s.filled.some(f=>f[0]===x&&f[1]===y)) setTile(x,y,HOLE);
+  }
+  s.filled.forEach(f=>{ if(grid[f[1]][f[0]]!==FILLED) setTile(f[0],f[1],FILLED); });
+  // 刃マスを復元: snapshot時に刃だった位置を刃に戻す
+  if(s.blades){
+    s.blades.forEach(f=>{ if(grid[f[1]][f[0]]!==BLADE) setTile(f[0],f[1],BLADE); });
+  }
+  // boulders
+  boulders.forEach(b=>b.el.remove());
+  boulders=[];
+  s.bs.forEach(p=>addBoulder(p[0],p[1]));
+  player.x=s.px; player.y=s.py; place(player.el,s.px,s.py);
+  if(typeof s.breaks==='number') breaksLeft=s.breaks;
+  breakMode=false;
+  steps=Math.max(0,steps-1); updateHUD(); updateBreakUI();
+  sfx.step();
+}
+
+/* ---------- HUD / win ---------- */
+function updateHUD(){
+  if(endless){
+    // 初回プレイ中は最善手も非表示。一度クリアした問題を再挑戦中は最善手を表示
+    const done = endlessData && endlessData.cleared;
+    const par = done ? endlessData.par : TX().par_unknown;
+    stepsEl.textContent = TX().steps(steps, par);
+    bestRecEl.textContent = '';
+    return;
+  }
+  const par = cleared.has(cur) ? LEVELS[cur].par : TX().par_unknown;
+  stepsEl.textContent = TX().steps(steps, par);
+  bestRecEl.textContent = (cur in bestSteps) ? TX().best(bestSteps[cur]) : '';
+}
+function renderChips(){
+  // 上部ナビの番号と矢印の有効/無効
+  if(endless){
+    stagePickNumEl.textContent = '∞';
+    // エンドレス中は「/ 100」ではなく問題番号を表示
+    document.getElementById('stagePick').lastChild.textContent =
+      (lang==='en') ? (' #'+endlessLevel) : (' 第'+endlessLevel+'問');
+    document.getElementById('prevStage').disabled = true;
+    document.getElementById('nextStage').disabled = true;
+    return;
+  }
+  document.getElementById('stagePick').lastChild.textContent = ' / '+LEVELS.length;
+  stagePickNumEl.textContent = (cur+1);
+  document.getElementById('prevStage').disabled = (cur===0);
+  document.getElementById('nextStage').disabled = (cur===LEVELS.length-1) || !isStageUnlocked(cur+1);
+  if(pickerEl.classList.contains('show')) buildPickGrid();
+}
+function buildPickGrid(){
+  pickGridEl.innerHTML='';
+  LEVELS.forEach((lv,i)=>{
+    const unlocked=isStageUnlocked(i);
+    const perfect=cleared.has(i)&&bestSteps[i]===LEVELS[i].par;
+    const c=document.createElement('button');
+    c.className='chip'+(i===cur?' cur':'')+(cleared.has(i)?' done':'')+(perfect?' perfect':'')+(unlocked?'':' locked');
+    c.style.position='relative';
+    c.textContent=i+1;
+    c.disabled=!unlocked;
+    c.onclick=unlocked ? ()=>{ closePicker(); loadLevel(i); } : null;
+    pickGridEl.appendChild(c);
+  });
+}
+function openPicker(){ edTestMode=false; showEdBackBtn(false); buildPickGrid(); pickerEl.classList.add('show'); }
+function closePicker(){ pickerEl.classList.remove('show'); }
+document.getElementById('stagePick').onclick=openPicker;
+document.getElementById('pickerClose').onclick=closePicker;
+pickerEl.onclick=(e)=>{ if(e.target===pickerEl) closePicker(); };
+document.getElementById('prevStage').onclick=()=>{ if(cur>0) loadLevel(cur-1); };
+document.getElementById('nextStage').onclick=()=>{ if(cur<LEVELS.length-1 && isStageUnlocked(cur+1)) loadLevel(cur+1); };
+function showWin(){
+  sfx.win();
+  const t=TX();
+  if(endless){
+    endlessData.cleared = true;
+    const pr = endlessData.par;
+    const prevBest = (endlessLevel in endlessBest) ? endlessBest[endlessLevel] : Infinity;
+    const best = Math.min(prevBest, steps);
+    endlessBest[endlessLevel] = best;
+    const isPerfect = (steps === pr);
+    ovTitle.textContent = isPerfect ? t.perfectClear : t.clear;
+    if(sharedMode){
+      ovText.innerHTML = (isPerfect ? t.winSharedP(steps) : t.winShared(steps)) + statsBlock(steps, best, pr)
+                       + (WEB_LOCKED ? t.webAppPromo : '');
+      ovNext.textContent = edTestMode ? t.editorBack : (WEB_LOCKED ? t.webRetry : t.toEndless);
+    }else{
+      ovText.innerHTML = (isPerfect ? t.winEndlessP(endlessLevel, steps) : t.winEndless(endlessLevel, steps))
+                       + statsBlock(steps, best, pr);
+      ovNext.textContent = t.nextEndless;
+    }
+    saveProgress();
+    renderChips(); updateHUD();
+    overlay.classList.add('show');
+    return;
+  }
+  cleared.add(cur);
+  const pr = LEVELS[cur].par;
+  const prevBest = (cur in bestSteps) ? bestSteps[cur] : Infinity;
+  const best = Math.min(prevBest, steps);
+  bestSteps[cur] = best;
+  const isPerfect = (steps === pr);
+  const last = cur===LEVELS.length-1;
+  const nm=levelName(cur);
+  if(last && cleared.size===LEVELS.length){
+    ovTitle.textContent=t.allClear;
+    ovText.innerHTML=t.allClearText(steps) + statsBlock(steps, best, pr);
+    ovNext.textContent=t.restart;
+  }else{
+    ovTitle.textContent = isPerfect ? t.perfectClear : t.clear;
+    ovText.innerHTML = (isPerfect ? t.winPerfect(nm, steps) : t.winNormal(nm, steps))
+                     + statsBlock(steps, best, pr);
+    ovNext.textContent = last ? t.toFirst : (isStageUnlocked(cur+1) ? t.next : t.pickerTitle);
+  }
+  saveProgress();
+  renderChips();
+  updateHUD();
+  overlay.classList.add('show');
+}
+// 今回 / 最善 の2数値ブロック(自己ベストはプレイ画面HUDに表示)
+function statsBlock(thisRun, best, par){
+  const t=TX();
+  return '<div class="statRow">'
+    + '<div class="stat"><span class="statLabel">'+t.statThis+'</span><span class="statVal">'+thisRun+'</span></div>'
+    + '<div class="stat statPar"><span class="statLabel">'+t.statPar+'</span><span class="statVal">'+par+'</span></div>'
+    + '</div>';
+}
+ovNext.onclick=()=>{
+  if(edTestMode){
+    edBackToEditor();
+    return;
+  }
+  if(endless){
+    if(sharedMode){
+      if(WEB_LOCKED){ ovRetry.onclick(); return; }   // Webでは本編に入れない
+      sharedMode=false; startEndless();
+    }
+    else { loadEndless(endlessNext); }
+  } else {
+    const next=(cur+1)%LEVELS.length;
+    if(next!==0 && !isStageUnlocked(next)){
+      overlay.classList.remove('show');
+      openPicker();
+      return;
+    }
+    loadLevel(next);
+  }
+};
+ovRetry.onclick=()=>{ if(endless){ renderBoard(endlessData.map); steps=0;history=[];won=false;busy=false;breaksLeft=(endlessData.breaks||0);breakMode=false;overlay.classList.remove('show');updateHUD();updateBreakUI(); } else { loadLevel(cur); } };
+document.getElementById('resetBtn').onclick=()=>{
+  if(endless){
+    renderBoard(endlessData.map); steps=0;history=[];won=false;busy=false;
+    breaksLeft=(endlessData.breaks||0); breakMode=false; updateBreakUI(); updateHUD();
+  } else { loadLevel(cur); }
+};
+// 壊すボタン: 回数0なら非表示。押すと壊すモードON(再度押すとOFF)。岩タップと併用可。
+function updateBreakUI(){
+  const btn=document.getElementById('breakBtn');
+  const cnt=document.getElementById('breakCount');
+  if(!btn) return;
+  const total = endless ? (endlessData&&endlessData.breaks||0) : (LEVELS[cur]&&LEVELS[cur].breaks||0);
+  if(total>0){
+    btn.style.display='';
+    cnt.textContent=breaksLeft;
+    btn.disabled = (breaksLeft<=0);
+    btn.classList.toggle('armed', breakMode);
+  }else{
+    btn.style.display='none';
+    breakMode=false;
+  }
+}
+document.getElementById('breakBtn').onclick=()=>{
+  if(breaksLeft<=0||won||busy) return;
+  audio();
+  breakMode=!breakMode;
+  updateBreakUI();
+};
+document.getElementById('soundBtn').onclick=function(){
+  muted = !muted;
+  bgmMuted = muted;
+  this.classList.toggle('muted', muted);
+  if(ambGain && actx){
+    ambGain.gain.setValueAtTime(ambGain.gain.value, actx.currentTime);
+    ambGain.gain.linearRampToValueAtTime(muted?0:1, actx.currentTime+0.4);
+  }
+  audio();
+};
+
+/* ---------- input ---------- */
+document.querySelectorAll('#dpad button').forEach(b=>{
+  const [dx,dy]=b.dataset.d.split(',').map(Number);
+  b.addEventListener('pointerdown',e=>{e.preventDefault();cancelAuto();tryMove(dx,dy);});
+});
+window.addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  const map={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]};
+  if(map[k]){e.preventDefault();cancelAuto();tryMove(...map[k]);}
+  if(k==='z')undo();
+  if(k==='r')loadLevel(cur);
+});
+
+/* ---------- タップ移動 ---------- */
+let autoPath=[], autoTimer=null, lastTouchT=0;
+function cancelAuto(){ autoPath.length=0; if(autoTimer){clearTimeout(autoTimer);autoTimer=null;} }
+function stepAuto(){
+  autoTimer=null;
+  if(!autoPath.length||busy||won){autoPath.length=0;return;}
+  const st=autoPath.shift();
+  const ex=player.x+st[0], ey=player.y+st[1];
+  tryMove(st[0],st[1]);
+  if(player.x!==ex||player.y!==ey){autoPath.length=0;return;}  // 予定通り動けなければ中断
+  if(autoPath.length) autoTimer=setTimeout(stepAuto,110);
+}
+function tapMove(tx,ty){
+  if(busy||won) return;
+  if(tx<0||ty<0||tx>=W||ty>=H) return;
+  cancelAuto();
+  const b=boulderAt(tx,ty);
+  if(b){
+    if(breaksLeft>0) return;   // 岩タップは既存の「壊す」(el.onclick)に任せる
+    const dx=tx-player.x, dy=ty-player.y;
+    if(Math.abs(dx)+Math.abs(dy)===1) tryMove(dx,dy);   // 隣の岩タップ=押す
+    return;
+  }
+  if(breakMode){ breakMode=false; updateBreakUI(); return; }
+  if(tx===player.x&&ty===player.y) return;
+  // 歩けるマスだけでBFS(岩は押さない)。壁/穴/刃/岩は通れない
+  const pass=(x,y)=>{
+    if(x<0||y<0||x>=W||y>=H)return false;
+    const t=grid[y][x];
+    if(t===WALL||t===HOLE||t===BLADE)return false;
+    return !boulderAt(x,y);
+  };
+  if(!pass(tx,ty))return;
+  const prev=new Map([[player.x+','+player.y,null]]);
+  const q=[[player.x,player.y]]; let head=0,found=false;
+  while(head<q.length){
+    const c=q[head++];
+    if(c[0]===tx&&c[1]===ty){found=true;break;}
+    for(const d of [[0,-1],[0,1],[-1,0],[1,0]]){
+      const nx=c[0]+d[0],ny=c[1]+d[1],k=nx+','+ny;
+      if(!pass(nx,ny)||prev.has(k))continue;
+      prev.set(k,[c[0],c[1],d[0],d[1]]); q.push([nx,ny]);
+    }
+  }
+  if(!found)return;
+  const steps2=[]; let k=tx+','+ty;
+  while(prev.get(k)){ const p=prev.get(k); steps2.push([p[2],p[3]]); k=p[0]+','+p[1]; }
+  autoPath=steps2.reverse();
+  stepAuto();
+}
+function boardCellFromPoint(cx,cy){
+  const rect=board.getBoundingClientRect();
+  return [Math.floor((cx-rect.left)/T), Math.floor((cy-rect.top)/T)];
+}
+
+let ts=null;
+board.parentElement.addEventListener('touchstart',e=>{ts={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
+board.parentElement.addEventListener('touchend',e=>{
+  if(!ts)return;
+  const dx=e.changedTouches[0].clientX-ts.x, dy=e.changedTouches[0].clientY-ts.y;
+  ts=null;
+  lastTouchT=Date.now();
+  if(Math.max(Math.abs(dx),Math.abs(dy))<22)return;   // タップ移動は不評につき無効化(tapMoveは温存)
+  cancelAuto();
+  if(Math.abs(dx)>Math.abs(dy)) tryMove(dx>0?1:-1,0);
+  else tryMove(0,dy>0?1:-1);
+});
+function relayout(){
+  if(!player || !player.el) return;   // 盤面未ロード(Web案内画面)では何もしない
+  const oldT=T; fitTiles();
+  if(T===oldT)return;
+  board.style.width=W*T+'px'; board.style.height=H*T+'px';
+  board.querySelectorAll('.tile').forEach(t=>{
+    t.style.width=T+'px';t.style.height=T+'px';
+    t.style.left=t.dataset.x*T+'px';t.style.top=t.dataset.y*T+'px';
+  });
+  boulders.forEach(b=>{sizeEnt(b.el);place(b.el,b.x,b.y);});
+  sizeEnt(player.el);place(player.el,player.x,player.y);
+}
+window.addEventListener('resize', relayout);
+window.addEventListener('orientationchange', ()=>setTimeout(relayout,200));
+
+function applyLang(){
+  const t=TX();
+  document.documentElement.lang = lang;
+  document.getElementById('gameTitle').textContent = t.title;
+  document.getElementById('langBtn').textContent = t.langLabel;
+  document.getElementById('pickerTitle').textContent = t.pickerTitle;
+  document.getElementById('pickerClose').textContent = t.close;
+  document.getElementById('themeTitle').textContent = t.themeTitle;
+  document.getElementById('charTitle').textContent = t.charTitle;
+  if(charPickerEl.classList.contains('show')) buildCharGrid();
+  document.getElementById('themeClose').textContent = t.close;
+  document.getElementById('helpTitle').textContent = t.helpTitle;
+  document.getElementById('helpClose').textContent = t.close;
+  { const hp=document.getElementById('helpPicker'); if(hp && hp.classList.contains('show')) buildHelp(); }
+  document.getElementById('endlessStart').textContent = (lang==='en') ? '∞ Endless Mode' : '∞ エンドレスモード';
+  document.getElementById('editorStart').textContent = (lang==='en') ? '✏️ Create a Course' : '✏️ コースを作る';
+  document.getElementById('myCoursesStart').textContent = (lang==='en') ? '📁 My Courses' : '📁 マイコース';
+  document.getElementById('myCoursesTitle').textContent = (lang==='en') ? 'My Courses' : 'マイコース';
+  document.getElementById('myCoursesClose').textContent = (lang==='en') ? 'Close' : 'とじる';
+  document.getElementById('edSave').textContent = (lang==='en') ? '💾 Save' : '💾 保存';
+  document.getElementById('edSaveConfirm').textContent = (lang==='en') ? 'Save' : '保存';
+  document.getElementById('edSaveCancel').textContent = (lang==='en') ? 'Cancel' : 'やめる';
+  document.getElementById('editorTitle').textContent = (lang==='en') ? 'Course Editor' : 'コースエディタ';
+  document.getElementById('editorExit').textContent = (lang==='en') ? '✕ Close' : '✕ とじる';
+  document.getElementById('edCheck').textContent = (lang==='en') ? '🔍 Check solvable' : '🔍 解けるかチェック';
+  document.getElementById('edBreakLabel2').textContent = (lang==='en') ? '💥Break' : '💥壊し';
+  document.getElementById('edWLabel').textContent = (lang==='en') ? 'W' : '幅';
+  document.getElementById('edHLabel').textContent = (lang==='en') ? 'H' : '高さ';
+  document.getElementById('edSlideLabel').textContent = (lang==='en') ? '❄️Ice' : '❄️氷';
+  document.getElementById('edShare').textContent = (lang==='en') ? '🔗 Make share link' : '🔗 共有リンクを作る';
+  document.getElementById('edTest').textContent = (lang==='en') ? '▶ Test play' : '▶ ためし遊び';
+  document.getElementById('ovRetry').textContent = t.retry;
+  const edBackBtn=document.getElementById('edBackBtn');
+  if(edBackBtn) edBackBtn.textContent = '◀ ' + t.editorBack;
+  if(edTestMode && overlay.classList.contains('show')) ovNext.textContent = t.editorBack;
+  document.getElementById('prevStage').setAttribute('aria-label', t.prevAria);
+  document.getElementById('nextStage').setAttribute('aria-label', t.nextAria);
+  stageNameEl.textContent = (!player.el && WEB_LOCKED) ? '' : (endless ? (sharedMode ? t.sharedStage() : t.endlessStage(endlessLevel)) : levelName(cur));
+  updateHUD();
+  if(pickerEl.classList.contains('show')) buildPickGrid();
+  if(themePickerEl.classList.contains('show')) buildThemeGrid();
+  document.title = t.title;
+}
+document.getElementById('langBtn').onclick=()=>{
+  lang = (lang==='ja') ? 'en' : 'ja';
+  applyLang();
+};
+
+/* ---------- テーマ切り替え ---------- */
+const THEME_ORDER = ['retro','natural','vivid','forest','hero8','zen'];
+const THEME_SWATCH = {
+  retro:['#c9a876','#55402f','#56e0c3'],
+  natural:['#c3a878','#4a8270','#ffb454'],
+  vivid:['#ffd000','#ff2e88','#00ffa3'],
+  forest:['#f0c86a','#7cb15b','#243225'],
+  hero8:['#4ab4ff','#7cffd6','#071125'],
+  zen:['#d94b34','#8fd4b0','#918a78']
+};
+let theme = 'retro';
+const themePickerEl = document.getElementById('themePicker');
+function applyTheme(name){
+  theme = name;
+  THEME_ORDER.forEach(t=>document.body.classList.remove('theme-'+t));
+  if(name!=='retro') document.body.classList.add('theme-'+name);
+}
+function buildThemeGrid(){
+  const grid=document.getElementById('themeGrid');
+  const t=TX();
+  grid.innerHTML='';
+  THEME_ORDER.forEach(name=>{
+    const meta=t.themes[name];
+    const card=document.createElement('button');
+    card.className='themeCard tc-'+name+(theme===name?' sel':'');
+    const sw=THEME_SWATCH[name].map(c=>'<i style="background:'+c+'"></i>').join('');
+    card.innerHTML='<span class="tName">'+meta[0]+'</span>'
+      +'<span class="tDesc">'+meta[1]+'</span>'
+      +'<span class="swatch">'+sw+'</span>'
+      +(theme===name?'<span class="tCheck">✓</span>':'');
+    card.onclick=()=>{ applyTheme(name); buildThemeGrid(); setTimeout(closeThemePicker,180); };
+    grid.appendChild(card);
+  });
+}
+function openThemePicker(){ buildThemeGrid(); themePickerEl.classList.add('show'); }
+function closeThemePicker(){ themePickerEl.classList.remove('show'); }
+document.getElementById('themeBtn').onclick=openThemePicker;
+document.getElementById('themeClose').onclick=closeThemePicker;
+themePickerEl.onclick=(e)=>{ if(e.target===themePickerEl) closeThemePicker(); };
+
+/* ---------- あそびかた(ヘルプ) ---------- */
+const helpPickerEl=document.getElementById('helpPicker');
+function buildHelp(){
+  const t=TX();
+  const c=document.getElementById('helpContent');
+  c.innerHTML='';
+  const secs=[[t.helpSecBasics,'basics'],[t.helpSecGimmicks,'gimmicks'],[t.helpSecModes,'modes']];
+  secs.forEach(([label,key])=>{
+    const h=document.createElement('div');
+    h.className='helpSection';
+    h.textContent='── '+label+' ──';
+    c.appendChild(h);
+    t.helpItems[key].forEach(it=>{
+      const row=document.createElement('div');
+      row.className='helpItem';
+      row.innerHTML='<div class="hIcon">'+it[0]+'</div>'
+        +'<div><div class="hName">'+it[1]+'</div><div class="hDesc">'+it[2]+'</div></div>';
+      c.appendChild(row);
+    });
+  });
+}
+function openHelp(){ buildHelp(); helpPickerEl.classList.add('show'); }
+function closeHelp(){ helpPickerEl.classList.remove('show'); }
+document.getElementById('helpBtn').onclick=openHelp;
+document.getElementById('helpClose').onclick=closeHelp;
+helpPickerEl.onclick=(e)=>{ if(e.target===helpPickerEl) closeHelp(); };
+
+/* ---------- キャラ選択 ---------- */
+const charPickerEl=document.getElementById('charPicker');
+function buildCharGrid(){
+  const grid=document.getElementById('charGrid');
+  const t=TX();
+  grid.innerHTML='';
+  CHARACTERS.forEach(c=>{
+    const unlocked=charUnlocked(c);
+    const card=document.createElement('button');
+    card.className='charCard'+(character===c.id?' sel':'')+(unlocked?'':' locked');
+    const preview='<div class="preview"><div class="player '+c.cls+'">'+playerInnerHTML(c.id)+'</div></div>';
+    if(unlocked){
+      card.innerHTML=preview+'<span class="cName">'+t.charNames[c.id]+'</span>';
+      card.onclick=()=>{ character=c.id; saveProgress(); refreshPlayerLook(); updateCharButton(); buildCharGrid(); };
+    }else{
+      card.innerHTML='<div class="preview" style="filter:grayscale(1) brightness(.5)">'+preview.replace('<div class="preview">','').replace(/<\/div>$/,'')+'</div><span class="cLock">🔒 '+t.charLock(c.need)+'</span>';
+      card.onclick=null;
+    }
+    grid.appendChild(card);
+  });
+}
+// 現在表示中のプレイヤー駒の見た目を更新
+function refreshPlayerLook(){
+  if(player && player.el){
+    player.el.className='ent player '+charClass();
+    player.el.innerHTML=playerInnerHTML(character);
+  }
+  updateCharButton();
+}
+function openCharPicker(){ buildCharGrid(); charPickerEl.classList.add('show'); }
+function closeCharPicker(){ charPickerEl.classList.remove('show'); }
+document.getElementById('charBtn2')&&(document.getElementById('charBtn2').onclick=openCharPicker);
+document.getElementById('charClose').onclick=closeCharPicker;
+charPickerEl.onclick=(e)=>{ if(e.target===charPickerEl) closeCharPicker(); };
+
+/* ---------- エンドレス開始 & 進捗保存(localStorage) ---------- */
+document.getElementById('endlessStart').onclick=()=>{ closePicker(); audio(); startEndless(); };
+
+const SAVE_KEY='kyoseki_save_v1';
+// ステージ盤面のシグネチャ。マップ差し替え時にクリア記録/ベストを自動リセットするために保存する
+function levelSig(i){
+  const L=LEVELS[i]; if(!L) return 0;
+  const s=L.map.join('|')+'/'+(L.par||0)+'/'+(L.breaks||0)+'/'+(L.slide?1:0);
+  let h=0; for(let k=0;k<s.length;k++){ h=(h*31+s.charCodeAt(k))|0; }
+  return h;
+}
+function saveProgress(){
+  try{
+    const sigs={}; for(const i of cleared) sigs[i]=levelSig(i);
+    const data={
+      cleared:[...cleared], bestSteps, endlessBest, sigs,
+      endlessRecord: Math.max(0, ...Object.keys(endlessBest).map(Number), 0),
+      lang, theme, character
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+  }catch(e){}
+}
+function loadProgress(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);
+    if(!raw) return;
+    const d=JSON.parse(raw);
+    if(d.cleared) cleared=new Set(d.cleared);
+    if(d.bestSteps) bestSteps=d.bestSteps;
+    // マップが差し替えられたステージはクリア記録をリセット(par再隠蔽・ベスト無効化)
+    if(d.sigs){
+      for(const i of [...cleared]){
+        if(d.sigs[i]!==levelSig(i)){ cleared.delete(i); delete bestSteps[i]; }
+      }
+    } else {
+      // 旧形式セーブ: シグネチャ不明のため、差し替え済みステージ(6,46,61,62,65,67,80,83,98)のみリセット
+      for(const i of [5,45,60,61,64,66,79,82,97]){ cleared.delete(i); delete bestSteps[i]; }
+    }
+    // 不可能な記録(ベスト<par)はマップ差し替えの残骸とみなしリセット
+    for(const i of [...cleared]){
+      if(LEVELS[i] && typeof bestSteps[i]==='number' && bestSteps[i]<LEVELS[i].par){
+        cleared.delete(i); delete bestSteps[i];
+      }
+    }
+    if(d.endlessBest) endlessBest=d.endlessBest;
+    if(d.lang) lang=d.lang;
+    if(d.theme && THEME_ORDER.includes(d.theme)) theme=d.theme;  // 削除済みテーマはretroへフォールバック
+    if(d.character) character=d.character;
+  }catch(e){}
+}
+
+// 保存済み進捗を読み込み(localStorage)
+loadProgress();
+
+/* ---------- マイコース(自作コースの端末内保存) ---------- */
+const COURSES_KEY='kyoseki_courses_v1';
+function getCourses(){
+  try{ const raw=localStorage.getItem(COURSES_KEY); return raw?JSON.parse(raw):[]; }catch(e){ return []; }
+}
+function saveCourse(course){
+  // course = {name, map, breaks, slide, par}
+  try{
+    const list=getCourses();
+    course.id = 'c'+Date.now();
+    list.push(course);
+    localStorage.setItem(COURSES_KEY, JSON.stringify(list));
+    return true;
+  }catch(e){ return false; }
+}
+function deleteCourse(id){
+  try{
+    const list=getCourses().filter(c=>c.id!==id);
+    localStorage.setItem(COURSES_KEY, JSON.stringify(list));
+  }catch(e){}
+}
+// ステージ総数をナビに反映(spanは保持してテキストノードだけ更新)
+document.getElementById('stagePick').lastChild.textContent=' / '+LEVELS.length;
+applyTheme(theme || 'retro');
+// URLに共有コースがあればそれを起動。なければ通常ステージ1(公開Webでは案内画面のみ)
+if(!checkSharedURL()){
+  if(WEB_LOCKED){
+    showWebLanding();
+  }else{
+    loadLevel(0);
+    // 初プレイならチュートリアルを表示
+    let tutDone=false;
+    try{ tutDone = localStorage.getItem('kyoseki_tut_done')==='1'; }catch(e){}
+    if(!tutDone) setTimeout(showTutorial, 400);
+  }
+}else if(WEB_LOCKED){
+  applyWebLock();
+}
+applyLang();
+updateCharButton();
+// レイアウト確定後に再フィット(初回は高さが未確定なことがあるため)
+requestAnimationFrame(relayout);
+setTimeout(relayout, 100);
+
+</script>
+</body>
+</html>
